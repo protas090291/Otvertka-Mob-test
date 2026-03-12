@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Проверка всех дефектов и их URL</title>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+        .container { background: white; padding: 20px; border-radius: 8px; max-width: 1400px; margin: 0 auto; }
+        h1 { color: #333; }
+        button { background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; margin: 10px 5px; }
+        button:hover { background: #2563eb; }
+        .result { margin: 15px 0; padding: 15px; background: #f9fafb; border-radius: 6px; border-left: 4px solid #3b82f6; }
+        .result.error { border-left-color: #ef4444; }
+        .result.success { border-left-color: #10b981; }
+        .defect-item { margin: 15px 0; padding: 15px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; }
+        .defect-item.has-photo { border-left: 4px solid #10b981; }
+        .defect-item.no-photo { border-left: 4px solid #ef4444; }
+        .defect-item.broken-url { border-left: 4px solid #f59e0b; }
+        .url-test { margin: 10px 0; padding: 10px; background: #f1f5f9; border-radius: 4px; font-family: monospace; font-size: 11px; word-break: break-all; }
+        .test-result { margin: 5px 0; padding: 5px; }
+        .test-result.ok { color: #10b981; }
+        .test-result.error { color: #ef4444; }
+        .test-result.warning { color: #f59e0b; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f9fafb; font-weight: 600; }
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+        .badge.ok { background: #d1fae5; color: #065f46; }
+        .badge.error { background: #fee2e2; color: #991b1b; }
+        .badge.warning { background: #fef3c7; color: #92400e; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Полная диагностика всех дефектов</h1>
+        <button onclick="checkAllDefects()">Проверить все дефекты</button>
+        <button onclick="fixAllBrokenUrls()">Исправить все сломанные URL</button>
+        <div id="summary"></div>
+        <div id="results"></div>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+        
+        const supabaseUrl = 'https://yytqmdanfcwfqfqruvta.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dHFtZGFuZmN3ZnFmcXJ1dnRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc1MzMzNDEsImV4cCI6MjA3MzEwOTM0MX0.vCgOY0MVZ6oGlZuK8SRhD8YhNyEsjP65ebJuWjy8HPw';
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+        
+        let allDefects = [];
+        let brokenDefects = [];
+        
+        async function testUrl(url, defectId) {
+            const results = [];
+            let isWorking = false;
+            let fixedUrl = null;
+            
+            // Проверяем наличие дубликатов пути
+            const hasDuplicate = url.includes('defect-photos/defect-photos/');
+            if (hasDuplicate) {
+                results.push(`<div class="test-result warning">⚠️ ДУБЛИКАТ ПУТИ: defect-photos/defect-photos/</div>`);
+            }
+            
+            // Извлекаем путь
+            let filePath = null;
+            const defectPhotosIndex = url.indexOf('defect-photos/');
+            if (defectPhotosIndex !== -1) {
+                const pathPart = url.substring(defectPhotosIndex);
+                let cleanPath = pathPart.split('?')[0].split('#')[0];
+                while (cleanPath.includes('defect-photos/defect-photos/')) {
+                    cleanPath = cleanPath.replace(/defect-photos\/defect-photos\//g, 'defect-photos/');
+                }
+                filePath = cleanPath;
+            }
+            
+            // Тест 1: Прямая проверка URL
+            try {
+                const response = await fetch(url, { method: 'HEAD' });
+                if (response.ok) {
+                    results.push(`<div class="test-result ok">✅ Прямой доступ: OK (${response.status})</div>`);
+                    isWorking = true;
+                } else {
+                    results.push(`<div class="test-result error">❌ Прямой доступ: ${response.status} ${response.statusText}</div>`);
+                }
+            } catch (e) {
+                results.push(`<div class="test-result error">❌ Прямой доступ: ${e.message}</div>`);
+            }
+            
+            // Тест 2: Создать signed URL
+            if (filePath && !isWorking) {
+                try {
+                    const { data: signedData, error: signedError } = await supabase.storage
+                        .from('defect-photos')
+                        .createSignedUrl(filePath, 3600);
+                    
+                    if (!signedError && signedData?.signedUrl) {
+                        // Проверяем signed URL
+                        try {
+                            const signedResponse = await fetch(signedData.signedUrl, { method: 'HEAD' });
+                            if (signedResponse.ok) {
+                                results.push(`<div class="test-result ok">✅ Signed URL работает!</div>`);
+                                results.push(`<div class="test-result ok">🔧 ИСПРАВЛЕННЫЙ URL: ${signedData.signedUrl.substring(0, 100)}...</div>`);
+                                fixedUrl = signedData.signedUrl;
+                                isWorking = true;
+                            } else {
+                                results.push(`<div class="test-result error">❌ Signed URL: ${signedResponse.status}</div>`);
+                            }
+                        } catch (e) {
+                            results.push(`<div class="test-result error">❌ Signed URL ошибка: ${e.message}</div>`);
+                        }
+                    } else {
+                        results.push(`<div class="test-result error">❌ Не удалось создать signed URL: ${signedError?.message}</div>`);
+                    }
+                } catch (e) {
+                    results.push(`<div class="test-result error">❌ Ошибка обработки: ${e.message}</div>`);
+                }
+            }
+            
+            return { results: results.join(''), isWorking, fixedUrl, filePath, hasDuplicate };
+        }
+        
+        window.checkAllDefects = async () => {
+            const resultsDiv = document.getElementById('results');
+            const summaryDiv = document.getElementById('summary');
+            resultsDiv.innerHTML = '<div class="result">Загрузка дефектов...</div>';
+            
+            try {
+                const { data: defects, error } = await supabase
+                    .from('defects')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (error) {
+                    resultsDiv.innerHTML = `<div class="result error">Ошибка: ${error.message}</div>`;
+                    return;
+                }
+                
+                if (!defects || defects.length === 0) {
+                    resultsDiv.innerHTML = '<div class="result">Дефекты не найдены</div>';
+                    return;
+                }
+                
+                allDefects = defects;
+                brokenDefects = [];
+                
+                let html = `<div class="result success">Найдено дефектов: ${defects.length}</div>`;
+                html += `<table><thead><tr><th>ID</th><th>Название</th><th>Создан</th><th>Фото URL</th><th>Статус</th><th>Действия</th></tr></thead><tbody>`;
+                
+                for (const defect of defects) {
+                    const hasPhoto = defect.photo_url && defect.photo_url.trim() !== '';
+                    
+                    html += `<tr>
+                        <td>${defect.id.substring(0, 8)}...</td>
+                        <td>${defect.title || 'Без названия'}</td>
+                        <td>${new Date(defect.created_at).toLocaleDateString()}</td>
+                        <td class="url-test">${hasPhoto ? defect.photo_url.substring(0, 80) + '...' : 'Нет фото'}</td>
+                        <td><span class="badge ${hasPhoto ? 'ok' : 'error'}">${hasPhoto ? 'Есть фото' : 'Нет фото'}</span></td>
+                        <td><button onclick="testDefect('${defect.id}')">Проверить</button></td>
+                    </tr>`;
+                }
+                
+                html += `</tbody></table>`;
+                resultsDiv.innerHTML = html;
+                
+                // Автоматически проверяем все дефекты с фото
+                const defectsWithPhoto = defects.filter(d => d.photo_url && d.photo_url.trim() !== '');
+                summaryDiv.innerHTML = `<div class="result">Проверка ${defectsWithPhoto.length} дефектов с фото...</div>`;
+                
+                let workingCount = 0;
+                let brokenCount = 0;
+                
+                for (const defect of defectsWithPhoto) {
+                    const testResult = await testUrl(defect.photo_url, defect.id);
+                    if (!testResult.isWorking) {
+                        brokenCount++;
+                        brokenDefects.push({ ...defect, ...testResult });
+                    } else {
+                        workingCount++;
+                    }
+                }
+                
+                summaryDiv.innerHTML = `<div class="result ${brokenCount > 0 ? 'error' : 'success'}">
+                    <h3>Результаты проверки:</h3>
+                    <p>✅ Рабочих URL: ${workingCount}</p>
+                    <p>❌ Сломанных URL: ${brokenCount}</p>
+                    <p>📊 Всего дефектов с фото: ${defectsWithPhoto.length}</p>
+                </div>`;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="result error">Ошибка: ${error.message}</div>`;
+            }
+        };
+        
+        window.testDefect = async (defectId) => {
+            const defect = allDefects.find(d => d.id === defectId);
+            if (!defect || !defect.photo_url) {
+                alert('Дефект не найден или нет фото');
+                return;
+            }
+            
+            const testResult = await testUrl(defect.photo_url, defect.id);
+            alert(`Результат проверки:\n${testResult.results.replace(/<[^>]*>/g, '')}`);
+        };
+        
+        window.fixAllBrokenUrls = async () => {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="result">Поиск дефектов с проблемными URL...</div>';
+            
+            // Находим все дефекты с дубликатами пути или сломанными URL
+            const defectsWithPhoto = allDefects.filter(d => d.photo_url && d.photo_url.trim() !== '');
+            const defectsToFix = [];
+            
+            for (const defect of defectsWithPhoto) {
+                const url = defect.photo_url;
+                const hasDuplicate = url.includes('defect-photos/defect-photos/');
+                
+                // Извлекаем путь
+                let filePath = null;
+                const defectPhotosIndex = url.indexOf('defect-photos/');
+                if (defectPhotosIndex !== -1) {
+                    const pathPart = url.substring(defectPhotosIndex);
+                    let cleanPath = pathPart.split('?')[0].split('#')[0];
+                    while (cleanPath.includes('defect-photos/defect-photos/')) {
+                        cleanPath = cleanPath.replace(/defect-photos\/defect-photos\//g, 'defect-photos/');
+                    }
+                    filePath = cleanPath;
+                }
+                
+                if (filePath && (hasDuplicate || !url.includes('/storage/v1/object/sign/'))) {
+                    defectsToFix.push({ defect, filePath });
+                }
+            }
+            
+            if (defectsToFix.length === 0) {
+                alert('Нет дефектов с проблемными URL для исправления');
+                return;
+            }
+            
+            if (!confirm(`Исправить ${defectsToFix.length} дефектов с проблемными URL?\n\nЭто создаст новые signed URL без дубликатов пути.`)) {
+                return;
+            }
+            
+            resultsDiv.innerHTML = '<div class="result">Исправление URL...</div>';
+            
+            let fixedCount = 0;
+            let errorCount = 0;
+            
+            for (const { defect, filePath } of defectsToFix) {
+                try {
+                    // Создаем новый signed URL
+                    const { data: signedData, error: signedError } = await supabase.storage
+                        .from('defect-photos')
+                        .createSignedUrl(filePath, 31536000); // 1 год
+                    
+                    if (!signedError && signedData?.signedUrl) {
+                        // Обновляем в базе данных
+                        const { error: updateError } = await supabase
+                            .from('defects')
+                            .update({ photo_url: signedData.signedUrl })
+                            .eq('id', defect.id);
+                        
+                        if (updateError) {
+                            console.error(`Ошибка обновления дефекта ${defect.id}:`, updateError);
+                            errorCount++;
+                        } else {
+                            fixedCount++;
+                            console.log(`✅ Исправлен дефект ${defect.id}`);
+                        }
+                    } else {
+                        console.error(`Ошибка создания signed URL для дефекта ${defect.id}:`, signedError);
+                        errorCount++;
+                    }
+                } catch (e) {
+                    console.error(`Ошибка обработки дефекта ${defect.id}:`, e);
+                    errorCount++;
+                }
+            }
+            
+            resultsDiv.innerHTML = `<div class="result ${errorCount > 0 ? 'error' : 'success'}">
+                <h3>Результаты исправления:</h3>
+                <p>✅ Исправлено: ${fixedCount}</p>
+                <p>❌ Ошибок: ${errorCount}</p>
+                <p>📊 Всего обработано: ${defectsToFix.length}</p>
+            </div>`;
+            
+            // Перезагружаем список
+            setTimeout(() => checkAllDefects(), 2000);
+        };
+    </script>
+</body>
+</html>

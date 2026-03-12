@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Проверка использования хранилища Supabase</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #3b82f6;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f9fafb;
+            border-radius: 6px;
+            border-left: 4px solid #3b82f6;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #1e293b;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        .status.ok { background: #10b981; color: white; }
+        .status.error { background: #ef4444; color: white; }
+        .status.warning { background: #f59e0b; color: white; }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover { background: #2563eb; }
+        button:disabled { background: #94a3b8; cursor: not-allowed; }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .result.success { border-left: 4px solid #10b981; }
+        .result.error { border-left: 4px solid #ef4444; }
+        .result.warning { border-left: 4px solid #f59e0b; }
+        .info-box {
+            background: #eff6ff;
+            border: 1px solid #3b82f6;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .info-box strong { color: #1e40af; }
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e2e8f0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981, #3b82f6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            transition: width 0.3s;
+        }
+        .progress-fill.warning { background: linear-gradient(90deg, #f59e0b, #ef4444); }
+        code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+        .file-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .file-item {
+            padding: 8px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+        }
+        .file-item:last-child { border-bottom: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💾 Проверка использования хранилища Supabase</h1>
+        
+        <div class="info-box">
+            <strong>📋 Что проверяется:</strong><br>
+            1. Размер всех файлов в bucket defect-photos<br>
+            2. Количество файлов<br>
+            3. Лимиты хранилища (зависит от плана)<br>
+            4. Использование трафика<br>
+            5. Возможность загрузки новых файлов
+        </div>
+
+        <div class="section">
+            <h2>1. Проверка файлов в bucket "defect-photos"</h2>
+            <button onclick="checkFiles()">Проверить файлы</button>
+            <div id="files-result"></div>
+        </div>
+
+        <div class="section">
+            <h2>2. Расчет размера хранилища</h2>
+            <button onclick="calculateStorage()">Рассчитать размер</button>
+            <div id="storage-result"></div>
+        </div>
+
+        <div class="section">
+            <h2>3. Тест загрузки файла</h2>
+            <input type="file" id="test-file" accept="image/*" style="margin: 10px 0;">
+            <button onclick="testUpload()">Попробовать загрузить</button>
+            <div id="upload-result"></div>
+        </div>
+
+        <div class="section">
+            <h2>4. Полная проверка хранилища</h2>
+            <button onclick="fullCheck()">Запустить полную проверку</button>
+            <div id="full-result"></div>
+        </div>
+
+        <div class="section">
+            <h2>📊 Лимиты Supabase (справочная информация)</h2>
+            <div class="info-box">
+                <strong>Бесплатный план (Free):</strong><br>
+                • Хранилище: 1 GB<br>
+                • Трафик: 2 GB/месяц<br>
+                • Размер файла: до 50 MB<br><br>
+                
+                <strong>Pro план ($25/месяц):</strong><br>
+                • Хранилище: 100 GB<br>
+                • Трафик: 250 GB/месяц<br>
+                • Размер файла: до 50 MB<br><br>
+                
+                <strong>Как проверить ваш план:</strong><br>
+                1. Откройте <a href="https://supabase.com/dashboard" target="_blank">Supabase Dashboard</a><br>
+                2. Settings → Billing<br>
+                3. Посмотрите ваш текущий план
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🔧 Как проверить использование в Dashboard</h2>
+            <div class="info-box">
+                <strong>Шаг 1: Проверка использования хранилища</strong><br>
+                1. Откройте <a href="https://supabase.com/dashboard" target="_blank">Supabase Dashboard</a><br>
+                2. Выберите ваш проект<br>
+                3. Перейдите в <strong>Settings → Usage</strong> (или <strong>Usage</strong> в боковом меню)<br>
+                4. Посмотрите раздел <strong>Storage</strong><br>
+                5. Там будет показано использованное хранилище и лимит<br><br>
+                
+                <strong>Шаг 2: Проверка трафика</strong><br>
+                1. В том же разделе <strong>Usage</strong><br>
+                2. Посмотрите раздел <strong>Bandwidth</strong><br>
+                3. Там будет показан использованный трафик и лимит<br><br>
+                
+                <strong>Шаг 3: Если лимит превышен</strong><br>
+                • Обновите план Supabase<br>
+                • Или удалите старые файлы из Storage<br>
+                • Или дождитесь обновления лимита (месячный цикл)
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+        
+        const supabaseUrl = 'https://yytqmdanfcwfqfqruvta.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dHFtZGFuZmN3ZnFmcXJ1dnRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc1MzMzNDEsImV4cCI6MjA3MzEwOTM0MX0.vCgOY0MVZ6oGlZuK8SRhD8YhNyEsjP65ebJuWjy8HPw';
+        
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+        
+        window.checkFiles = async () => {
+            const resultDiv = document.getElementById('files-result');
+            resultDiv.innerHTML = '<div class="result">Получение списка файлов...</div>';
+            
+            try {
+                // Получаем все файлы из папки defect-photos
+                const { data: files, error } = await supabase.storage
+                    .from('defect-photos')
+                    .list('defect-photos', {
+                        limit: 1000,
+                        offset: 0,
+                        sortBy: { column: 'created_at', order: 'desc' }
+                    });
+                
+                if (error) {
+                    resultDiv.innerHTML = `<div class="result error">❌ Ошибка получения файлов: ${error.message}</div>`;
+                    return;
+                }
+                
+                if (!files || files.length === 0) {
+                    resultDiv.innerHTML = '<div class="result warning">⚠️ В bucket нет файлов</div>';
+                    return;
+                }
+                
+                let totalSize = 0;
+                const filesList = files.map(f => {
+                    const size = f.metadata?.size || 0;
+                    totalSize += size;
+                    const sizeKB = size / 1024;
+                    const sizeMB = sizeKB / 1024;
+                    return {
+                        name: f.name,
+                        size: size,
+                        sizeKB: sizeKB,
+                        sizeMB: sizeMB,
+                        created: f.created_at
+                    };
+                });
+                
+                const totalMB = totalSize / 1024 / 1024;
+                const totalGB = totalMB / 1024;
+                
+                const filesHtml = filesList.map(f => 
+                    `<div class="file-item">
+                        <span>${f.name}</span>
+                        <span>${f.sizeMB.toFixed(2)} MB (${new Date(f.created).toLocaleString('ru-RU')})</span>
+                    </div>`
+                ).join('');
+                
+                resultDiv.innerHTML = `
+                    <div class="result success">
+                        ✅ Найдено файлов: ${files.length}<br><br>
+                        <strong>Общий размер:</strong><br>
+                        • ${totalSize.toLocaleString('ru-RU')} байт<br>
+                        • ${totalMB.toFixed(2)} MB<br>
+                        • ${totalGB.toFixed(3)} GB<br><br>
+                        <strong>Список файлов:</strong>
+                        <div class="file-list">${filesHtml}</div>
+                    </div>
+                `;
+                
+            } catch (err) {
+                resultDiv.innerHTML = `<div class="result error">❌ Ошибка: ${err.message}</div>`;
+            }
+        };
+        
+        window.calculateStorage = async () => {
+            const resultDiv = document.getElementById('storage-result');
+            resultDiv.innerHTML = '<div class="result">Расчет размера хранилища...</div>';
+            
+            try {
+                const { data: files } = await supabase.storage
+                    .from('defect-photos')
+                    .list('defect-photos', { limit: 10000 });
+                
+                if (!files || files.length === 0) {
+                    resultDiv.innerHTML = '<div class="result warning">⚠️ Файлы не найдены</div>';
+                    return;
+                }
+                
+                let totalSize = 0;
+                files.forEach(f => {
+                    totalSize += f.metadata?.size || 0;
+                });
+                
+                const totalMB = totalSize / 1024 / 1024;
+                const totalGB = totalMB / 1024;
+                
+                // Лимиты для разных планов
+                const limits = {
+                    free: { storage: 1 * 1024, name: 'Free (1 GB)' },
+                    pro: { storage: 100 * 1024, name: 'Pro (100 GB)' }
+                };
+                
+                let usagePercent = 0;
+                let limitName = 'Неизвестно';
+                let statusClass = 'ok';
+                
+                // Определяем, какой лимит использовать (предполагаем Free)
+                const limit = limits.free;
+                usagePercent = (totalMB / limit.storage) * 100;
+                limitName = limit.name;
+                
+                if (usagePercent > 100) {
+                    statusClass = 'error';
+                } else if (usagePercent > 80) {
+                    statusClass = 'warning';
+                }
+                
+                resultDiv.innerHTML = `
+                    <div class="result ${statusClass === 'error' ? 'error' : statusClass === 'warning' ? 'warning' : 'success'}">
+                        <strong>Использование хранилища:</strong><br><br>
+                        <div class="progress-bar">
+                            <div class="progress-fill ${statusClass}" style="width: ${Math.min(usagePercent, 100)}%">
+                                ${usagePercent.toFixed(1)}%
+                            </div>
+                        </div>
+                        <br>
+                        <strong>Использовано:</strong> ${totalMB.toFixed(2)} MB (${totalGB.toFixed(3)} GB)<br>
+                        <strong>Лимит (предполагаемый):</strong> ${limit.storage} MB (${limit.storage / 1024} GB)<br>
+                        <strong>Осталось:</strong> ${Math.max(0, limit.storage - totalMB).toFixed(2)} MB<br><br>
+                        <strong>⚠️ ВАЖНО:</strong> Это приблизительный расчет. Точное использование смотрите в Supabase Dashboard → Settings → Usage → Storage
+                    </div>
+                `;
+                
+            } catch (err) {
+                resultDiv.innerHTML = `<div class="result error">❌ Ошибка: ${err.message}</div>`;
+            }
+        };
+        
+        window.testUpload = async () => {
+            const fileInput = document.getElementById('test-file');
+            const resultDiv = document.getElementById('upload-result');
+            
+            if (!fileInput.files || !fileInput.files[0]) {
+                resultDiv.innerHTML = '<div class="result warning">⚠️ Выберите файл для загрузки</div>';
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            const fileSizeMB = file.size / 1024 / 1024;
+            
+            resultDiv.innerHTML = `<div class="result">Попытка загрузки файла (${fileSizeMB.toFixed(2)} MB)...</div>`;
+            
+            try {
+                const fileName = `test-upload-${Date.now()}-${file.name}`;
+                const filePath = `defect-photos/${fileName}`;
+                
+                const { data, error } = await supabase.storage
+                    .from('defect-photos')
+                    .upload(filePath, file);
+                
+                if (error) {
+                    let errorMsg = error.message;
+                    
+                    // Проверяем специфичные ошибки
+                    if (error.message.includes('quota') || error.message.includes('limit') || error.message.includes('storage')) {
+                        errorMsg = `❌ ПРЕВЫШЕН ЛИМИТ ХРАНИЛИЩА! ${error.message}`;
+                    } else if (error.message.includes('bandwidth') || error.message.includes('traffic')) {
+                        errorMsg = `❌ ПРЕВЫШЕН ЛИМИТ ТРАФИКА! ${error.message}`;
+                    }
+                    
+                    resultDiv.innerHTML = `<div class="result error">${errorMsg}<br><br>Код ошибки: ${error.statusCode || 'N/A'}</div>`;
+                    return;
+                }
+                
+                resultDiv.innerHTML = `<div class="result success">✅ Файл загружен успешно!<br><br>• Путь: ${data.path}<br>• Размер: ${fileSizeMB.toFixed(2)} MB</div>`;
+                
+            } catch (err) {
+                resultDiv.innerHTML = `<div class="result error">❌ Ошибка: ${err.message}</div>`;
+            }
+        };
+        
+        window.fullCheck = async () => {
+            const resultDiv = document.getElementById('full-result');
+            resultDiv.innerHTML = '<div class="result">Запуск полной проверки...</div>';
+            
+            const results = [];
+            
+            // 1. Проверка файлов
+            try {
+                const { data: files } = await supabase.storage
+                    .from('defect-photos')
+                    .list('defect-photos', { limit: 10000 });
+                
+                if (files && files.length > 0) {
+                    let totalSize = 0;
+                    files.forEach(f => {
+                        totalSize += f.metadata?.size || 0;
+                    });
+                    const totalMB = totalSize / 1024 / 1024;
+                    results.push(`✅ Файлов найдено: ${files.length}`);
+                    results.push(`✅ Общий размер: ${totalMB.toFixed(2)} MB (${(totalMB / 1024).toFixed(3)} GB)`);
+                } else {
+                    results.push(`⚠️ Файлы не найдены`);
+                }
+            } catch (err) {
+                results.push(`❌ Ошибка проверки файлов: ${err.message}`);
+            }
+            
+            // 2. Тест загрузки
+            try {
+                const testFile = new Blob(['test'], { type: 'text/plain' });
+                const testName = `storage-test-${Date.now()}.txt`;
+                const { error: uploadError } = await supabase.storage
+                    .from('defect-photos')
+                    .upload(`defect-photos/${testName}`, testFile);
+                
+                if (uploadError) {
+                    if (uploadError.message.includes('quota') || uploadError.message.includes('limit') || uploadError.message.includes('storage')) {
+                        results.push(`❌ ПРЕВЫШЕН ЛИМИТ ХРАНИЛИЩА!`);
+                    } else {
+                        results.push(`❌ Ошибка загрузки: ${uploadError.message}`);
+                    }
+                } else {
+                    results.push(`✅ Тестовая загрузка: OK`);
+                    // Удаляем тестовый файл
+                    await supabase.storage.from('defect-photos').remove([`defect-photos/${testName}`]);
+                }
+            } catch (err) {
+                results.push(`❌ Ошибка теста загрузки: ${err.message}`);
+            }
+            
+            resultDiv.innerHTML = `<div class="result">${results.join('<br>')}<br><br><strong>📋 Рекомендации:</strong><br>1. Проверьте точное использование в Supabase Dashboard → Settings → Usage<br>2. Если лимит превышен - обновите план или удалите старые файлы</div>`;
+        };
+    </script>
+</body>
+</html>

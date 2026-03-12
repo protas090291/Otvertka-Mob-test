@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Проверка файлов в Storage</title>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+        .container { background: white; padding: 20px; border-radius: 8px; max-width: 1400px; margin: 0 auto; }
+        h1 { color: #333; }
+        button { background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; margin: 10px 5px; }
+        button:hover { background: #2563eb; }
+        .result { margin: 15px 0; padding: 15px; background: #f9fafb; border-radius: 6px; border-left: 4px solid #3b82f6; }
+        .result.error { border-left-color: #ef4444; }
+        .result.success { border-left-color: #10b981; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f9fafb; font-weight: 600; }
+        .file-item { margin: 10px 0; padding: 10px; background: #f1f5f9; border-radius: 4px; }
+        .url-test { font-family: monospace; font-size: 11px; word-break: break-all; }
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+        .badge.ok { background: #d1fae5; color: #065f46; }
+        .badge.error { background: #fee2e2; color: #991b1b; }
+        img { max-width: 200px; max-height: 200px; border-radius: 4px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Проверка файлов в Storage</h1>
+        <button onclick="listAllFiles()">Показать все файлы в Storage</button>
+        <button onclick="checkDefectsUrls()">Проверить URL дефектов</button>
+        <div id="results"></div>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+        
+        const supabaseUrl = 'https://yytqmdanfcwfqfqruvta.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dHFtZGFuZmN3ZnFmcXJ1dnRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc1MzMzNDEsImV4cCI6MjA3MzEwOTM0MX0.vCgOY0MVZ6oGlZuK8SRhD8YhNyEsjP65ebJuWjy8HPw';
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+        
+        window.listAllFiles = async () => {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="result">Загрузка файлов из Storage...</div>';
+            
+            try {
+                const { data: files, error } = await supabase.storage
+                    .from('defect-photos')
+                    .list('defect-photos', {
+                        limit: 100,
+                        offset: 0,
+                        sortBy: { column: 'created_at', order: 'desc' }
+                    });
+                
+                if (error) {
+                    resultsDiv.innerHTML = `<div class="result error">Ошибка: ${error.message}</div>`;
+                    return;
+                }
+                
+                if (!files || files.length === 0) {
+                    resultsDiv.innerHTML = '<div class="result">Файлы не найдены. Попробуйте проверить путь без префикса defect-photos/</div>';
+                    
+                    // Пробуем без префикса
+                    const { data: files2, error: error2 } = await supabase.storage
+                        .from('defect-photos')
+                        .list('', {
+                            limit: 100,
+                            offset: 0
+                        });
+                    
+                    if (!error2 && files2 && files2.length > 0) {
+                        displayFiles(files2, resultsDiv);
+                        return;
+                    }
+                    return;
+                }
+                
+                displayFiles(files, resultsDiv);
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="result error">Ошибка: ${error.message}</div>`;
+            }
+        };
+        
+        function displayFiles(files, resultsDiv) {
+            let html = `<div class="result success">Найдено файлов: ${files.length}</div>`;
+            html += `<table><thead><tr><th>Имя файла</th><th>Размер</th><th>Создан</th><th>Публичный URL</th><th>Проверка</th><th>Превью</th></tr></thead><tbody>`;
+            
+            files.forEach(file => {
+                const filePath = file.name.startsWith('defect-photos/') ? file.name : `defect-photos/${file.name}`;
+                const { data: urlData } = supabase.storage
+                    .from('defect-photos')
+                    .getPublicUrl(filePath);
+                
+                const publicUrl = urlData.publicUrl;
+                const sizeKB = Math.round(file.metadata?.size / 1024) || 0;
+                
+                html += `<tr>
+                    <td class="url-test">${file.name}</td>
+                    <td>${sizeKB} KB</td>
+                    <td>${file.created_at ? new Date(file.created_at).toLocaleString() : 'Неизвестно'}</td>
+                    <td class="url-test">${publicUrl.substring(0, 80)}...</td>
+                    <td><button onclick="testFileUrl('${publicUrl}', '${file.name}')">Проверить</button></td>
+                    <td><img src="${publicUrl}" onerror="this.style.display='none'" alt="Превью" /></td>
+                </tr>`;
+            });
+            
+            html += `</tbody></table>`;
+            resultsDiv.innerHTML = html;
+        }
+        
+        window.testFileUrl = async (url, fileName) => {
+            try {
+                const response = await fetch(url, { method: 'HEAD' });
+                if (response.ok) {
+                    alert(`✅ Файл доступен!\n\nИмя: ${fileName}\nURL: ${url}\nСтатус: ${response.status}`);
+                } else {
+                    alert(`❌ Файл недоступен!\n\nИмя: ${fileName}\nURL: ${url}\nСтатус: ${response.status} ${response.statusText}`);
+                }
+            } catch (e) {
+                alert(`❌ Ошибка проверки!\n\nИмя: ${fileName}\nURL: ${url}\nОшибка: ${e.message}`);
+            }
+        };
+        
+        window.checkDefectsUrls = async () => {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="result">Загрузка дефектов...</div>';
+            
+            try {
+                const { data: defects, error } = await supabase
+                    .from('defects')
+                    .select('id, title, photo_url')
+                    .not('photo_url', 'is', null)
+                    .limit(50);
+                
+                if (error) {
+                    resultsDiv.innerHTML = `<div class="result error">Ошибка: ${error.message}</div>`;
+                    return;
+                }
+                
+                if (!defects || defects.length === 0) {
+                    resultsDiv.innerHTML = '<div class="result">Дефекты с фото не найдены</div>';
+                    return;
+                }
+                
+                let html = `<div class="result success">Найдено дефектов с фото: ${defects.length}</div>`;
+                html += `<table><thead><tr><th>ID</th><th>Название</th><th>URL из базы</th><th>Проверка</th><th>Превью</th></tr></thead><tbody>`;
+                
+                for (const defect of defects) {
+                    const url = defect.photo_url;
+                    const hasDuplicate = url.includes('defect-photos/defect-photos/');
+                    
+                    html += `<tr>
+                        <td>${defect.id.substring(0, 8)}...</td>
+                        <td>${defect.title || 'Без названия'}</td>
+                        <td class="url-test">${url.substring(0, 100)}... ${hasDuplicate ? '<span class="badge error">ДУБЛИКАТ!</span>' : ''}</td>
+                        <td><button onclick="testDefectUrl('${url}', '${defect.id}')">Проверить</button></td>
+                        <td><img src="${url}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" alt="Превью" /><span style="display:none; color:red;">❌ Не загружается</span></td>
+                    </tr>`;
+                }
+                
+                html += `</tbody></table>`;
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="result error">Ошибка: ${error.message}</div>`;
+            }
+        };
+        
+        window.testDefectUrl = async (url, defectId) => {
+            try {
+                const response = await fetch(url, { method: 'HEAD' });
+                if (response.ok) {
+                    alert(`✅ URL работает!\n\nДефект: ${defectId}\nURL: ${url}\nСтатус: ${response.status}`);
+                } else {
+                    alert(`❌ URL не работает!\n\nДефект: ${defectId}\nURL: ${url}\nСтатус: ${response.status} ${response.statusText}`);
+                }
+            } catch (e) {
+                alert(`❌ Ошибка проверки!\n\nДефект: ${defectId}\nURL: ${url}\nОшибка: ${e.message}`);
+            }
+        };
+    </script>
+</body>
+</html>

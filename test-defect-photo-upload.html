@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест загрузки фото дефекта</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #3b82f6;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f9fafb;
+            border-radius: 6px;
+            border-left: 4px solid #3b82f6;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover { background: #2563eb; }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .result.success { border-left: 4px solid #10b981; }
+        .result.error { border-left: 4px solid #ef4444; }
+        .result.warning { border-left: 4px solid #f59e0b; }
+        .step {
+            margin: 10px 0;
+            padding: 10px;
+            background: #eff6ff;
+            border-radius: 4px;
+        }
+        .step-number {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            background: #3b82f6;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Тест создания дефекта с фото</h1>
+        
+        <div class="section">
+            <h2>Полный тест процесса</h2>
+            <p>Этот тест симулирует создание дефекта с фото через мобильное приложение:</p>
+            <ol>
+                <li>Создает тестовый дефект</li>
+                <li>Загружает тестовое изображение</li>
+                <li>Обновляет дефект с URL фото</li>
+                <li>Проверяет, что фото сохранилось в базе данных</li>
+                <li>Проверяет, что фото доступно в Storage</li>
+            </ol>
+            <button onclick="runFullTest()">Запустить полный тест</button>
+            <div id="test-result"></div>
+        </div>
+
+        <div class="section">
+            <h2>Проверка существующих дефектов</h2>
+            <button onclick="checkExistingDefects()">Проверить дефекты в базе данных</button>
+            <div id="defects-result"></div>
+        </div>
+
+        <div class="section">
+            <h2>Проверка файлов в Storage</h2>
+            <button onclick="checkStorageFiles()">Проверить файлы в Storage</button>
+            <div id="storage-result"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+        
+        const supabaseUrl = 'https://yytqmdanfcwfqfqruvta.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dHFtZGFuZmN3ZnFmcXJ1dnRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc1MzMzNDEsImV4cCI6MjA3MzEwOTM0MX0.vCgOY0MVZ6oGlZuK8SRhD8YhNyEsjP65ebJuWjy8HPw';
+        const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dHFtZGFuZmN3ZnFmcXJ1dnRhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NzUzMzM0MSwiZXhwIjoyMDczMTA5MzQxfQ.ni200CDPDR225aDJhBHQXh17t0fnX8bXuzYflOTPYnM';
+        
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+        
+        // Создаем тестовое изображение (1x1 пиксель PNG)
+        function createTestImage() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1;
+            canvas.height = 1;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(0, 0, 1, 1);
+            return new Promise((resolve) => {
+                canvas.toBlob((blob) => {
+                    resolve(blob);
+                }, 'image/png');
+            });
+        }
+        
+        window.runFullTest = async () => {
+            const resultDiv = document.getElementById('test-result');
+            resultDiv.innerHTML = '<div class="result">Запуск теста...</div>';
+            
+            const steps = [];
+            
+            try {
+                // Шаг 1: Создание дефекта
+                steps.push('<div class="step"><span class="step-number">1</span>Создание тестового дефекта...</div>');
+                resultDiv.innerHTML = steps.join('');
+                
+                const testDefect = {
+                    apartment_id: 'test-apartment-' + Date.now(),
+                    title: 'Тестовый дефект ' + new Date().toLocaleString('ru-RU'),
+                    description: 'Автоматический тест загрузки фото',
+                    status: 'active',
+                    x_coord: 50.0,
+                    y_coord: 50.0
+                };
+                
+                const { data: defectData, error: defectError } = await supabaseAdmin
+                    .from('defects')
+                    .insert([testDefect])
+                    .select()
+                    .single();
+                
+                if (defectError) {
+                    throw new Error(`Ошибка создания дефекта: ${defectError.message}`);
+                }
+                
+                steps[steps.length - 1] = `<div class="step"><span class="step-number">1</span>✅ Дефект создан: ID = ${defectData.id}</div>`;
+                resultDiv.innerHTML = steps.join('');
+                
+                // Шаг 2: Создание тестового изображения
+                steps.push('<div class="step"><span class="step-number">2</span>Создание тестового изображения...</div>');
+                resultDiv.innerHTML = steps.join('');
+                
+                const testImageBlob = await createTestImage();
+                const fileExt = 'png';
+                const fileName = `${defectData.id}-${Date.now()}.${fileExt}`;
+                const filePath = `defect-photos/${fileName}`;
+                
+                steps[steps.length - 1] = `<div class="step"><span class="step-number">2</span>✅ Изображение создано: ${filePath}</div>`;
+                resultDiv.innerHTML = steps.join('');
+                
+                // Шаг 3: Загрузка изображения в Storage
+                steps.push('<div class="step"><span class="step-number">3</span>Загрузка изображения в Storage...</div>');
+                resultDiv.innerHTML = steps.join('');
+                
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('defect-photos')
+                    .upload(filePath, testImageBlob, {
+                        contentType: 'image/png',
+                        upsert: false
+                    });
+                
+                if (uploadError) {
+                    throw new Error(`Ошибка загрузки: ${uploadError.message}`);
+                }
+                
+                steps[steps.length - 1] = `<div class="step"><span class="step-number">3</span>✅ Изображение загружено в Storage</div>`;
+                resultDiv.innerHTML = steps.join('');
+                
+                // Шаг 4: Получение публичного URL (как в новой логике)
+                steps.push('<div class="step"><span class="step-number">4</span>Получение публичного URL...</div>');
+                resultDiv.innerHTML = steps.join('');
+                
+                const { data: urlData } = supabase.storage
+                    .from('defect-photos')
+                    .getPublicUrl(filePath);
+                
+                const photoUrl = urlData.publicUrl;
+                
+                steps[steps.length - 1] = `<div class="step"><span class="step-number">4</span>✅ URL получен: ${photoUrl.substring(0, 80)}...</div>`;
+                resultDiv.innerHTML = steps.join('');
+                
+                // Шаг 5: Обновление дефекта с URL
+                steps.push('<div class="step"><span class="step-number">5</span>Обновление дефекта с URL фото...</div>');
+                resultDiv.innerHTML = steps.join('');
+                
+                const { data: updatedDefect, error: updateError } = await supabaseAdmin
+                    .from('defects')
+                    .update({ photo_url: photoUrl })
+                    .eq('id', defectData.id)
+                    .select()
+                    .single();
+                
+                if (updateError) {
+                    throw new Error(`Ошибка обновления: ${updateError.message}`);
+                }
+                
+                steps[steps.length - 1] = `<div class="step"><span class="step-number">5</span>✅ Дефект обновлен с photo_url</div>`;
+                resultDiv.innerHTML = steps.join('');
+                
+                // Шаг 6: Проверка сохранения в базе данных
+                steps.push('<div class="step"><span class="step-number">6</span>Проверка сохранения в базе данных...</div>');
+                resultDiv.innerHTML = steps.join('');
+                
+                const { data: checkDefect, error: checkError } = await supabase
+                    .from('defects')
+                    .select('id, title, photo_url')
+                    .eq('id', defectData.id)
+                    .single();
+                
+                if (checkError) {
+                    throw new Error(`Ошибка проверки: ${checkError.message}`);
+                }
+                
+                const photoUrlSaved = checkDefect.photo_url === photoUrl;
+                
+                if (photoUrlSaved) {
+                    steps[steps.length - 1] = `<div class="step"><span class="step-number">6</span>✅ photo_url сохранен в базе данных!</div>`;
+                } else {
+                    steps[steps.length - 1] = `<div class="step"><span class="step-number">6</span>❌ photo_url НЕ совпадает! Ожидалось: ${photoUrl}, Получено: ${checkDefect.photo_url}</div>`;
+                }
+                resultDiv.innerHTML = steps.join('');
+                
+                // Шаг 7: Проверка доступности фото
+                steps.push('<div class="step"><span class="step-number">7</span>Проверка доступности фото...</div>');
+                resultDiv.innerHTML = steps.join('');
+                
+                try {
+                    const response = await fetch(photoUrl, { method: 'HEAD' });
+                    if (response.ok) {
+                        steps[steps.length - 1] = `<div class="step"><span class="step-number">7</span>✅ Фото доступно по URL!</div>`;
+                    } else {
+                        steps[steps.length - 1] = `<div class="step"><span class="step-number">7</span>⚠️ Фото недоступно: статус ${response.status}</div>`;
+                    }
+                } catch (e) {
+                    steps[steps.length - 1] = `<div class="step"><span class="step-number">7</span>⚠️ Ошибка проверки доступности: ${e.message}</div>`;
+                }
+                resultDiv.innerHTML = steps.join('');
+                
+                // Итоговый результат
+                const allSuccess = photoUrlSaved;
+                resultDiv.innerHTML += `<div class="result ${allSuccess ? 'success' : 'error'}">
+                    <strong>${allSuccess ? '✅ ТЕСТ ПРОЙДЕН!' : '❌ ТЕСТ НЕ ПРОЙДЕН'}</strong><br><br>
+                    <strong>Результаты:</strong><br>
+                    • Дефект создан: ✅<br>
+                    • Фото загружено: ✅<br>
+                    • URL получен: ✅<br>
+                    • Дефект обновлен: ✅<br>
+                    • photo_url в базе: ${photoUrlSaved ? '✅' : '❌'}<br>
+                    • Фото доступно: ${steps[steps.length - 1].includes('✅') ? '✅' : '⚠️'}<br><br>
+                    <strong>ID дефекта:</strong> ${defectData.id}<br>
+                    <strong>photo_url:</strong> ${checkDefect.photo_url || 'НЕ СОХРАНЕН'}<br>
+                    <strong>URL фото:</strong> ${photoUrl}
+                </div>`;
+                
+            } catch (error) {
+                resultDiv.innerHTML += `<div class="result error">❌ Ошибка теста: ${error.message}</div>`;
+            }
+        };
+        
+        window.checkExistingDefects = async () => {
+            const resultDiv = document.getElementById('defects-result');
+            resultDiv.innerHTML = '<div class="result">Проверка дефектов...</div>';
+            
+            try {
+                const { data: defects, error } = await supabase
+                    .from('defects')
+                    .select('id, title, photo_url, created_at')
+                    .order('created_at', { ascending: false })
+                    .limit(20);
+                
+                if (error) {
+                    throw error;
+                }
+                
+                if (!defects || defects.length === 0) {
+                    resultDiv.innerHTML = '<div class="result warning">⚠️ Дефекты не найдены</div>';
+                    return;
+                }
+                
+                const defectsWithPhoto = defects.filter(d => d.photo_url);
+                const defectsWithoutPhoto = defects.filter(d => !d.photo_url);
+                
+                const defectsList = defects.map(d => {
+                    const hasPhoto = !!d.photo_url;
+                    const photoStatus = hasPhoto ? '✅' : '❌';
+                    const photoUrl = d.photo_url ? d.photo_url.substring(0, 60) + '...' : 'нет';
+                    return `${photoStatus} ${d.title} (ID: ${d.id})<br>   photo_url: ${photoUrl}<br>   Создан: ${new Date(d.created_at).toLocaleString('ru-RU')}`;
+                }).join('<br><br>');
+                
+                resultDiv.innerHTML = `<div class="result success">
+                    <strong>Найдено дефектов:</strong> ${defects.length}<br>
+                    <strong>С фото:</strong> ${defectsWithPhoto.length}<br>
+                    <strong>Без фото:</strong> ${defectsWithoutPhoto.length}<br><br>
+                    <strong>Список дефектов:</strong><br><br>
+                    ${defectsList}
+                </div>`;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result error">❌ Ошибка: ${error.message}</div>`;
+            }
+        };
+        
+        window.checkStorageFiles = async () => {
+            const resultDiv = document.getElementById('storage-result');
+            resultDiv.innerHTML = '<div class="result">Проверка файлов в Storage...</div>';
+            
+            try {
+                const { data: files, error } = await supabase.storage
+                    .from('defect-photos')
+                    .list('defect-photos', {
+                        limit: 50,
+                        sortBy: { column: 'created_at', order: 'desc' }
+                    });
+                
+                if (error) {
+                    throw error;
+                }
+                
+                if (!files || files.length === 0) {
+                    resultDiv.innerHTML = '<div class="result warning">⚠️ Файлы не найдены</div>';
+                    return;
+                }
+                
+                let totalSize = 0;
+                const filesList = files.map(f => {
+                    const size = f.metadata?.size || 0;
+                    totalSize += size;
+                    return `• ${f.name} (${(size / 1024).toFixed(2)} KB, ${new Date(f.created_at).toLocaleString('ru-RU')})`;
+                }).join('<br>');
+                
+                resultDiv.innerHTML = `<div class="result success">
+                    <strong>Найдено файлов:</strong> ${files.length}<br>
+                    <strong>Общий размер:</strong> ${(totalSize / 1024 / 1024).toFixed(2)} MB<br><br>
+                    <strong>Список файлов:</strong><br>
+                    ${filesList}
+                </div>`;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result error">❌ Ошибка: ${error.message}</div>`;
+            }
+        };
+    </script>
+</body>
+</html>

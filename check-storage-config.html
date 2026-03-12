@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Проверка конфигурации Supabase Storage</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #3b82f6;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f9fafb;
+            border-radius: 6px;
+            border-left: 4px solid #3b82f6;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #1e293b;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        .status.ok { background: #10b981; color: white; }
+        .status.error { background: #ef4444; color: white; }
+        .status.warning { background: #f59e0b; color: white; }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover { background: #2563eb; }
+        button:disabled { background: #94a3b8; cursor: not-allowed; }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .result.success { border-left: 4px solid #10b981; }
+        .result.error { border-left: 4px solid #ef4444; }
+        .result.warning { border-left: 4px solid #f59e0b; }
+        .info-box {
+            background: #eff6ff;
+            border: 1px solid #3b82f6;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .info-box strong { color: #1e40af; }
+        code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Диагностика Supabase Storage для дефектов</h1>
+        
+        <div class="info-box">
+            <strong>📋 Что проверяется:</strong><br>
+            1. Существование bucket <code>defect-photos</code><br>
+            2. Публичный/приватный доступ к bucket<br>
+            3. Политики доступа (RLS) для Storage<br>
+            4. Возможность загрузки файлов<br>
+            5. Возможность получения файлов<br>
+            6. Ограничения по размеру файла<br>
+            7. Проверка существующих файлов
+        </div>
+
+        <div class="section">
+            <h2>1. Проверка подключения к Supabase</h2>
+            <button onclick="checkConnection()">Проверить подключение</button>
+            <div id="connection-result"></div>
+        </div>
+
+        <div class="section">
+            <h2>2. Проверка bucket "defect-photos"</h2>
+            <button onclick="checkBucket()">Проверить bucket</button>
+            <div id="bucket-result"></div>
+        </div>
+
+        <div class="section">
+            <h2>3. Проверка политик доступа (RLS)</h2>
+            <button onclick="checkPolicies()">Проверить политики</button>
+            <div id="policies-result"></div>
+        </div>
+
+        <div class="section">
+            <h2>4. Тест загрузки файла</h2>
+            <input type="file" id="test-file" accept="image/*" style="margin: 10px 0;">
+            <button onclick="testUpload()">Загрузить тестовый файл</button>
+            <div id="upload-result"></div>
+        </div>
+
+        <div class="section">
+            <h2>5. Проверка существующих файлов</h2>
+            <button onclick="listFiles()">Список файлов в bucket</button>
+            <div id="files-result"></div>
+        </div>
+
+        <div class="section">
+            <h2>6. Полная диагностика</h2>
+            <button onclick="fullDiagnostic()">Запустить полную диагностику</button>
+            <div id="full-result"></div>
+        </div>
+
+        <div class="section">
+            <h2>📝 Инструкции для Supabase Dashboard</h2>
+            <div class="info-box">
+                <strong>Как проверить вручную:</strong><br><br>
+                
+                <strong>1. Проверка bucket:</strong><br>
+                - Откройте <a href="https://supabase.com/dashboard" target="_blank">Supabase Dashboard</a><br>
+                - Перейдите в Storage → Buckets<br>
+                - Найдите bucket <code>defect-photos</code><br>
+                - Проверьте, что он существует и настроен правильно<br><br>
+                
+                <strong>2. Проверка публичного доступа:</strong><br>
+                - В настройках bucket проверьте "Public bucket"<br>
+                - Если bucket приватный, нужны правильные RLS политики<br><br>
+                
+                <strong>3. Проверка RLS политик:</strong><br>
+                - Storage → Policies<br>
+                - Должны быть политики для:<br>
+                  • SELECT (чтение файлов)<br>
+                  • INSERT (загрузка файлов)<br>
+                  • UPDATE (обновление файлов)<br>
+                  • DELETE (удаление файлов)<br><br>
+                
+                <strong>4. Проверка ограничений:</strong><br>
+                - Settings → API → Storage<br>
+                - Проверьте максимальный размер файла<br>
+                - Проверьте лимиты трафика (если есть)<br><br>
+                
+                <strong>5. Проверка существующих файлов:</strong><br>
+                - Storage → defect-photos<br>
+                - Посмотрите список загруженных файлов<br>
+                - Проверьте их размер и дату загрузки
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+        
+        const supabaseUrl = 'https://yytqmdanfcwfqfqruvta.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dHFtZGFuZmN3ZnFmcXJ1dnRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc1MzMzNDEsImV4cCI6MjA3MzEwOTM0MX0.vCgOY0MVZ6oGlZuK8SRhD8YhNyEsjP65ebJuWjy8HPw';
+        
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+        
+        window.checkConnection = async () => {
+            const resultDiv = document.getElementById('connection-result');
+            resultDiv.innerHTML = '<div class="result">Проверка подключения...</div>';
+            
+            try {
+                const { data, error } = await supabase.from('defects').select('count').limit(1);
+                
+                if (error) {
+                    resultDiv.innerHTML = `<div class="result error">❌ Ошибка подключения: ${error.message}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="result success">✅ Подключение успешно!<br>Supabase URL: ${supabaseUrl}</div>`;
+                }
+            } catch (err) {
+                resultDiv.innerHTML = `<div class="result error">❌ Ошибка: ${err.message}</div>`;
+            }
+        };
+        
+        window.checkBucket = async () => {
+            const resultDiv = document.getElementById('bucket-result');
+            resultDiv.innerHTML = '<div class="result">Проверка bucket...</div>';
+            
+            try {
+                // Пытаемся получить список bucket'ов
+                const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
+                
+                if (bucketsError) {
+                    resultDiv.innerHTML = `<div class="result error">❌ Ошибка получения списка bucket'ов: ${bucketsError.message}</div>`;
+                    return;
+                }
+                
+                const defectPhotosBucket = buckets.find(b => b.name === 'defect-photos');
+                
+                if (!defectPhotosBucket) {
+                    resultDiv.innerHTML = `<div class="result error">❌ Bucket "defect-photos" не найден!<br><br>Найденные bucket'ы: ${buckets.map(b => b.name).join(', ') || 'нет'}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="result success">✅ Bucket "defect-photos" найден!<br><br>Детали:<br>• ID: ${defectPhotosBucket.id}<br>• Имя: ${defectPhotosBucket.name}<br>• Публичный: ${defectPhotosBucket.public ? 'Да ✅' : 'Нет ⚠️'}<br>• Создан: ${new Date(defectPhotosBucket.created_at).toLocaleString('ru-RU')}</div>`;
+                }
+            } catch (err) {
+                resultDiv.innerHTML = `<div class="result error">❌ Ошибка: ${err.message}</div>`;
+            }
+        };
+        
+        window.checkPolicies = async () => {
+            const resultDiv = document.getElementById('policies-result');
+            resultDiv.innerHTML = '<div class="result">Проверка политик...</div>';
+            
+            try {
+                // Пытаемся загрузить и получить файл для проверки политик
+                const testFileName = `test-policy-check-${Date.now()}.txt`;
+                const testContent = new Blob(['test'], { type: 'text/plain' });
+                
+                // Тест загрузки
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('defect-photos')
+                    .upload(testFileName, testContent);
+                
+                if (uploadError) {
+                    resultDiv.innerHTML = `<div class="result error">❌ Ошибка загрузки (проверка INSERT политики): ${uploadError.message}<br><br>Это означает, что политика INSERT не настроена или настроена неправильно.</div>`;
+                    return;
+                }
+                
+                // Тест получения
+                const { data: downloadData, error: downloadError } = await supabase.storage
+                    .from('defect-photos')
+                    .download(testFileName);
+                
+                if (downloadError) {
+                    resultDiv.innerHTML = `<div class="result warning">⚠️ Файл загружен, но не удается получить (проверка SELECT политики): ${downloadError.message}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="result success">✅ Политики работают!<br>• INSERT (загрузка): ✅<br>• SELECT (чтение): ✅</div>`;
+                }
+                
+                // Удаляем тестовый файл
+                await supabase.storage.from('defect-photos').remove([testFileName]);
+                
+            } catch (err) {
+                resultDiv.innerHTML = `<div class="result error">❌ Ошибка: ${err.message}</div>`;
+            }
+        };
+        
+        window.testUpload = async () => {
+            const fileInput = document.getElementById('test-file');
+            const resultDiv = document.getElementById('upload-result');
+            
+            if (!fileInput.files || !fileInput.files[0]) {
+                resultDiv.innerHTML = '<div class="result warning">⚠️ Выберите файл для загрузки</div>';
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            resultDiv.innerHTML = '<div class="result">Загрузка файла...</div>';
+            
+            try {
+                const fileName = `test-upload-${Date.now()}-${file.name}`;
+                const filePath = `defect-photos/${fileName}`;
+                
+                const { data, error } = await supabase.storage
+                    .from('defect-photos')
+                    .upload(filePath, file);
+                
+                if (error) {
+                    resultDiv.innerHTML = `<div class="result error">❌ Ошибка загрузки: ${error.message}<br><br>Код ошибки: ${error.statusCode || 'N/A'}</div>`;
+                    return;
+                }
+                
+                // Пытаемся получить URL
+                const { data: urlData } = supabase.storage
+                    .from('defect-photos')
+                    .getPublicUrl(filePath);
+                
+                // Пытаемся создать signed URL
+                const { data: signedUrlData, error: signedError } = await supabase.storage
+                    .from('defect-photos')
+                    .createSignedUrl(filePath, 3600);
+                
+                resultDiv.innerHTML = `<div class="result success">✅ Файл загружен успешно!<br><br>• Путь: ${data.path}<br>• Публичный URL: ${urlData.publicUrl}<br>• Signed URL: ${signedUrlData?.signedUrl || 'Не удалось создать'}<br><br>Попробуйте открыть публичный URL в браузере.</div>`;
+                
+            } catch (err) {
+                resultDiv.innerHTML = `<div class="result error">❌ Ошибка: ${err.message}</div>`;
+            }
+        };
+        
+        window.listFiles = async () => {
+            const resultDiv = document.getElementById('files-result');
+            resultDiv.innerHTML = '<div class="result">Получение списка файлов...</div>';
+            
+            try {
+                const { data: files, error } = await supabase.storage
+                    .from('defect-photos')
+                    .list('defect-photos', {
+                        limit: 100,
+                        offset: 0,
+                        sortBy: { column: 'created_at', order: 'desc' }
+                    });
+                
+                if (error) {
+                    resultDiv.innerHTML = `<div class="result error">❌ Ошибка получения списка файлов: ${error.message}</div>`;
+                    return;
+                }
+                
+                if (!files || files.length === 0) {
+                    resultDiv.innerHTML = '<div class="result warning">⚠️ В bucket нет файлов</div>';
+                    return;
+                }
+                
+                const filesInfo = files.map(f => {
+                    const sizeKB = (f.metadata?.size || 0) / 1024;
+                    return `• ${f.name} (${sizeKB.toFixed(2)} KB, ${new Date(f.created_at).toLocaleString('ru-RU')})`;
+                }).join('<br>');
+                
+                resultDiv.innerHTML = `<div class="result success">✅ Найдено файлов: ${files.length}<br><br>${filesInfo}</div>`;
+                
+            } catch (err) {
+                resultDiv.innerHTML = `<div class="result error">❌ Ошибка: ${err.message}</div>`;
+            }
+        };
+        
+        window.fullDiagnostic = async () => {
+            const resultDiv = document.getElementById('full-result');
+            resultDiv.innerHTML = '<div class="result">Запуск полной диагностики...</div>';
+            
+            const results = [];
+            
+            // 1. Проверка подключения
+            try {
+                const { error } = await supabase.from('defects').select('count').limit(1);
+                results.push(error ? `❌ Подключение: ${error.message}` : '✅ Подключение: OK');
+            } catch (err) {
+                results.push(`❌ Подключение: ${err.message}`);
+            }
+            
+            // 2. Проверка bucket
+            try {
+                const { data: buckets } = await supabase.storage.listBuckets();
+                const bucket = buckets.find(b => b.name === 'defect-photos');
+                results.push(bucket ? `✅ Bucket найден (публичный: ${bucket.public ? 'Да' : 'Нет'})` : '❌ Bucket не найден');
+            } catch (err) {
+                results.push(`❌ Bucket: ${err.message}`);
+            }
+            
+            // 3. Проверка файлов
+            try {
+                const { data: files } = await supabase.storage.from('defect-photos').list('defect-photos', { limit: 10 });
+                results.push(files ? `✅ Файлы доступны (найдено: ${files.length})` : '⚠️ Файлы не найдены');
+            } catch (err) {
+                results.push(`❌ Файлы: ${err.message}`);
+            }
+            
+            // 4. Тест загрузки
+            try {
+                const testFile = new Blob(['test'], { type: 'text/plain' });
+                const testName = `diagnostic-test-${Date.now()}.txt`;
+                const { error: uploadError } = await supabase.storage
+                    .from('defect-photos')
+                    .upload(`defect-photos/${testName}`, testFile);
+                
+                if (uploadError) {
+                    results.push(`❌ Загрузка: ${uploadError.message}`);
+                } else {
+                    results.push('✅ Загрузка: OK');
+                    // Удаляем тестовый файл
+                    await supabase.storage.from('defect-photos').remove([`defect-photos/${testName}`]);
+                }
+            } catch (err) {
+                results.push(`❌ Загрузка: ${err.message}`);
+            }
+            
+            resultDiv.innerHTML = `<div class="result">${results.join('<br>')}</div>`;
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+https://qr.expo.dev/eas-update?projectId=bce5f246-91b5-491f-bcf1-28df1ccf3c21&runtimeVersion=2.0.0&branch=production

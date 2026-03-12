@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Диагностика URL фото дефектов</title>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+        .container { background: white; padding: 20px; border-radius: 8px; max-width: 1200px; margin: 0 auto; }
+        h1 { color: #333; }
+        button { background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; margin: 10px 5px; }
+        button:hover { background: #2563eb; }
+        .result { margin: 15px 0; padding: 15px; background: #f9fafb; border-radius: 6px; border-left: 4px solid #3b82f6; }
+        .result.error { border-left-color: #ef4444; }
+        .result.success { border-left-color: #10b981; }
+        .defect-item { margin: 15px 0; padding: 15px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; }
+        .url-test { margin: 10px 0; padding: 10px; background: #f1f5f9; border-radius: 4px; font-family: monospace; font-size: 12px; word-break: break-all; }
+        .test-result { margin: 5px 0; padding: 5px; }
+        .test-result.ok { color: #10b981; }
+        .test-result.error { color: #ef4444; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Диагностика URL фото дефектов</h1>
+        <button onclick="checkAllDefects()">Проверить все дефекты с фото</button>
+        <div id="results"></div>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+        
+        const supabaseUrl = 'https://yytqmdanfcwfqfqruvta.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dHFtZGFuZmN3ZnFmcXJ1dnRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc1MzMzNDEsImV4cCI6MjA3MzEwOTM0MX0.vCgOY0MVZ6oGlZuK8SRhD8YhNyEsjP65ebJuWjy8HPw';
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+        
+        async function testUrl(url, defectId) {
+            const results = [];
+            
+            // Тест 1: Прямая проверка URL
+            try {
+                const response = await fetch(url, { method: 'HEAD' });
+                if (response.ok) {
+                    results.push(`<div class="test-result ok">✅ Прямой доступ: OK (${response.status})</div>`);
+                } else {
+                    results.push(`<div class="test-result error">❌ Прямой доступ: ${response.status} ${response.statusText}</div>`);
+                }
+            } catch (e) {
+                results.push(`<div class="test-result error">❌ Прямой доступ: ${e.message}</div>`);
+            }
+            
+            // Тест 2: Извлечь путь из URL и попробовать создать signed URL
+            try {
+                // Пытаемся извлечь путь из URL
+                const urlMatch = url.match(/\/storage\/v1\/object\/(?:public|sign)\/([^?]+)/);
+                if (urlMatch) {
+                    const filePath = urlMatch[1];
+                    results.push(`<div class="test-result">📁 Извлеченный путь: ${filePath}</div>`);
+                    
+                    // Пробуем создать signed URL
+                    const { data: signedData, error: signedError } = await supabase.storage
+                        .from('defect-photos')
+                        .createSignedUrl(filePath, 3600);
+                    
+                    if (!signedError && signedData?.signedUrl) {
+                        // Проверяем signed URL
+                        try {
+                            const signedResponse = await fetch(signedData.signedUrl, { method: 'HEAD' });
+                            if (signedResponse.ok) {
+                                results.push(`<div class="test-result ok">✅ Signed URL работает: OK</div>`);
+                                results.push(`<div class="test-result ok">🔧 РЕШЕНИЕ: Использовать signed URL: ${signedData.signedUrl.substring(0, 80)}...</div>`);
+                            } else {
+                                results.push(`<div class="test-result error">❌ Signed URL: ${signedResponse.status}</div>`);
+                            }
+                        } catch (e) {
+                            results.push(`<div class="test-result error">❌ Signed URL ошибка: ${e.message}</div>`);
+                        }
+                    } else {
+                        results.push(`<div class="test-result error">❌ Не удалось создать signed URL: ${signedError?.message}</div>`);
+                    }
+                } else {
+                    results.push(`<div class="test-result error">❌ Не удалось извлечь путь из URL</div>`);
+                }
+            } catch (e) {
+                results.push(`<div class="test-result error">❌ Ошибка обработки: ${e.message}</div>`);
+            }
+            
+            // Тест 3: Попробовать разные варианты пути
+            try {
+                const urlMatch = url.match(/defect-photos\/([^?]+)/);
+                if (urlMatch) {
+                    const fileName = urlMatch[1];
+                    const pathsToTry = [
+                        fileName,
+                        `defect-photos/${fileName}`,
+                        `defect-photos/defect-photos/${fileName}`.replace(/defect-photos\/defect-photos\//, 'defect-photos/')
+                    ];
+                    
+                    for (const path of pathsToTry) {
+                        const { data: urlData } = supabase.storage.from('defect-photos').getPublicUrl(path);
+                        try {
+                            const testResponse = await fetch(urlData.publicUrl, { method: 'HEAD' });
+                            if (testResponse.ok) {
+                                results.push(`<div class="test-result ok">✅ Рабочий путь: ${path}</div>`);
+                                results.push(`<div class="test-result ok">🔧 РЕШЕНИЕ: Использовать URL: ${urlData.publicUrl.substring(0, 80)}...</div>`);
+                                break;
+                            }
+                        } catch (e) {
+                            // Продолжаем
+                        }
+                    }
+                }
+            } catch (e) {
+                // Игнорируем
+            }
+            
+            return results.join('');
+        }
+        
+        window.checkAllDefects = async () => {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="result">Загрузка дефектов...</div>';
+            
+            try {
+                const { data: defects, error } = await supabase
+                    .from('defects')
+                    .select('id, title, photo_url, created_at')
+                    .not('photo_url', 'is', null)
+                    .order('created_at', { ascending: false })
+                    .limit(20);
+                
+                if (error) {
+                    resultsDiv.innerHTML = `<div class="result error">Ошибка: ${error.message}</div>`;
+                    return;
+                }
+                
+                if (!defects || defects.length === 0) {
+                    resultsDiv.innerHTML = '<div class="result">Дефекты с фото не найдены</div>';
+                    return;
+                }
+                
+                let html = `<div class="result success">Найдено дефектов с фото: ${defects.length}</div>`;
+                
+                for (const defect of defects) {
+                    html += `<div class="defect-item">
+                        <h3>${defect.title} (ID: ${defect.id})</h3>
+                        <div class="url-test">URL из базы: ${defect.photo_url}</div>
+                        <div id="test-${defect.id}">Тестирование...</div>
+                    </div>`;
+                    
+                    resultsDiv.innerHTML = html;
+                    
+                    // Тестируем URL
+                    const testResults = await testUrl(defect.photo_url, defect.id);
+                    document.getElementById(`test-${defect.id}`).innerHTML = testResults;
+                }
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="result error">Ошибка: ${error.message}</div>`;
+            }
+        };
+    </script>
+</body>
+</html>
