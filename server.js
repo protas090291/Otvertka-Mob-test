@@ -30,9 +30,7 @@ function startMetro() {
     'expo',
     'start',
     '--host', 'lan', // Используем 'lan' так как Expo CLI не поддерживает '0.0.0.0'
-    '--port', PORT.toString(), // Metro использует порт 8080
-    '--no-dev', // Отключаем dev режим для продакшена
-    '--minify'  // Минификация для продакшена
+    '--port', PORT.toString() // Metro использует порт 8080
   ];
 
   metroProcess = spawn('npx', metroArgs, {
@@ -42,8 +40,8 @@ function startMetro() {
       ...process.env,
       EXPO_NO_DOTENV: '1',
       EXPO_DEVTOOLS_LISTEN_ADDRESS: '0.0.0.0',
-      NODE_OPTIONS: '--max-old-space-size=4096',
-      CI: 'true' // Указываем что это CI окружение
+      NODE_OPTIONS: '--max-old-space-size=4096'
+      // CI: 'true' убран - вызывает ошибку non-interactive mode в Expo Go
     },
     detached: false
   });
