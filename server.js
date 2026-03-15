@@ -33,16 +33,22 @@ function startMetro() {
     '--port', PORT.toString() // Metro использует порт 8080
   ];
 
+  // Создаем env без CI переменных (Time Web Cloud может устанавливать CI=true)
+  const env = { ...process.env };
+  delete env.CI; // Явно удаляем CI чтобы избежать non-interactive mode
+  delete env.CI_NAME;
+  delete env.CI_BUILD_ID;
+  delete env.CI_BUILD_NUMBER;
+  delete env.CONTINUOUS_INTEGRATION;
+  
+  env.EXPO_NO_DOTENV = '1';
+  env.EXPO_DEVTOOLS_LISTEN_ADDRESS = '0.0.0.0';
+  env.NODE_OPTIONS = '--max-old-space-size=4096';
+
   metroProcess = spawn('npx', metroArgs, {
     cwd: __dirname,
-    stdio: ['ignore', 'pipe', 'pipe'], // Перенаправляем вывод для логирования
-    env: {
-      ...process.env,
-      EXPO_NO_DOTENV: '1',
-      EXPO_DEVTOOLS_LISTEN_ADDRESS: '0.0.0.0',
-      NODE_OPTIONS: '--max-old-space-size=4096'
-      // CI: 'true' убран - вызывает ошибку non-interactive mode в Expo Go
-    },
+    stdio: ['inherit', 'pipe', 'pipe'], // stdin: 'inherit' для интерактивного режима
+    env: env,
     detached: false
   });
 
