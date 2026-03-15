@@ -22,10 +22,16 @@ npm install
 
 ### 3. Команда запуска (Start Command)
 ```
-npx expo start --host lan --port 8081 --clear
+node server.js
 ```
 
-**Важно:** Используйте `--host lan` для доступа извне!
+**Важно:** Используйте `node server.js` вместо `npx expo start`!
+
+Express сервер (`server.js`) автоматически:
+- Запускает Metro Bundler на порту 8081
+- Предоставляет health check endpoint на `/status`
+- Проксирует запросы к Metro Bundler
+- Слушает на порту 8080 (или указанном в переменной PORT)
 
 ### 4. Путь проверки состояния (Health Check Path)
 ```
@@ -39,10 +45,11 @@ npx expo start --host lan --port 8081 --clear
 | Переменная | Значение |
 |-----------|----------|
 | `NODE_ENV` | `production` |
+| `PORT` | `8080` |
+| `METRO_PORT` | `8081` |
 | `EXPO_NO_DOTENV` | `1` |
 | `EXPO_DEVTOOLS_LISTEN_ADDRESS` | `0.0.0.0` |
 | `NODE_OPTIONS` | `--max-old-space-size=4096` |
-| `PORT` | `8081` |
 
 ## 🔧 После развертывания
 
@@ -65,14 +72,21 @@ npx expo start --host lan --port 8081 --clear
    https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=exp://YOUR_SERVER_IP:8081
    ```
 
-### Проверка работы Metro Bundler
+### Проверка работы сервера
 
-Проверьте доступность Metro Bundler:
+Проверьте доступность Express сервера (health check):
 ```bash
-curl http://YOUR_SERVER_IP:8081/status
+curl http://YOUR_SERVER_IP:8080/status
 ```
 
-Должен вернуть статус 200.
+Должен вернуть JSON с статусом `ok`.
+
+Проверьте доступность Metro Bundler через прокси:
+```bash
+curl http://YOUR_SERVER_IP:8080/
+```
+
+Express сервер автоматически проксирует запросы к Metro Bundler на порту 8081.
 
 ## 🐛 Устранение проблем
 
