@@ -213,8 +213,10 @@ const metroProxy = createProxyMiddleware({
     }
   },
   onProxyReq: (proxyReq, req, res) => {
-    // Добавляем заголовки если нужно
+    // Добавляем заголовки для Expo Go
     proxyReq.setHeader('X-Forwarded-For', req.ip);
+    proxyReq.setHeader('X-Forwarded-Proto', req.protocol);
+    proxyReq.setHeader('X-Forwarded-Host', req.get('host'));
   }
 });
 
