@@ -4,7 +4,7 @@
   "description": "Отвёртка - Мобильное приложение для управления строительством",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "npx expo start --host lan --port 8080 --no-dev --minify",
     "start:expo": "expo start",
     "start:server": "./start-server.sh",
     "start:tunnel": "./start-tunnel.sh",
