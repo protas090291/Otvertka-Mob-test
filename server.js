@@ -49,7 +49,7 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/status',
       qr: '/qr',
-      metro: `http://localhost:${METRO_PORT}`
+      metro: `http://localhost:${PORT}`
     },
     metro_ready: metroReady
   });
