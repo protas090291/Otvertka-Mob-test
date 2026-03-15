@@ -58,7 +58,10 @@ app.get('/qr', (req, res) => {
   // Определяем домен из запроса или используем переменную окружения
   const host = req.get('host') || process.env.SERVER_HOST || 'protas090291-otvertka-mob-test-beaf.twc1.net';
   const hostname = host.split(':')[0]; // Убираем порт если есть
-  const expoUrl = `exp://${hostname}:${METRO_PORT}`;
+  
+  // Используем порт Express сервера (8080) вместо Metro порта (8081)
+  // Express проксирует запросы к Metro Bundler
+  const expoUrl = `exp://${hostname}:${PORT}`;
   
   // URL для генерации QR-кода через онлайн API
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(expoUrl)}`;
