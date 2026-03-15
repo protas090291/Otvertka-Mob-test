@@ -359,19 +359,14 @@ function startMetro() {
   return metroProcess;
 }
 
-// Запускаем сервер
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Express сервер запущен на порту ${PORT}`);
-  console.log(`📡 Health check: http://0.0.0.0:${PORT}/status`);
-  console.log(`🔗 Metro Bundler будет доступен на порту ${METRO_PORT}`);
-  console.log(`🌐 Сервер готов принимать запросы`);
-  
-  // Запускаем Metro Bundler асинхронно (не блокируем запуск Express)
-  setTimeout(() => {
-    console.log('🚀 Запуск Metro Bundler в фоновом режиме...');
-    startMetro();
-  }, 2000); // Небольшая задержка для полной инициализации Express
-});
+// Запускаем Metro Bundler напрямую без Express
+// Express больше не нужен, Metro Bundler работает напрямую на порту 8080
+console.log(`🚀 Запуск Metro Bundler на порту ${PORT}...`);
+console.log(`📡 Health check: http://0.0.0.0:${PORT}/status`);
+console.log(`🌐 Metro Bundler будет доступен на порту ${PORT}`);
+
+// Запускаем Metro Bundler
+startMetro();
 
 // Обработка ошибок сервера
 server.on('error', (err) => {
