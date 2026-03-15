@@ -29,7 +29,7 @@ app.get('/status', (req, res) => {
   res.status(200).json({
     status: 'ok',
     service: 'Expo Metro Bundler Proxy',
-    metro_port: METRO_PORT,
+    metro_port: PORT,
     metro_ready: metroReady,
     timestamp: new Date().toISOString()
   });
