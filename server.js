@@ -59,8 +59,8 @@ app.get('/qr', (req, res) => {
   const host = req.get('host') || process.env.SERVER_HOST || 'protas090291-otvertka-mob-test-beaf.twc1.net';
   const hostname = host.split(':')[0]; // Убираем порт если есть
   
-  // Используем порт Metro Bundler (8081) - Expo Go требует прямой доступ
-  const expoUrl = `exp://${hostname}:${METRO_PORT}`;
+  // Используем порт PORT (8080) - Metro Bundler работает на том же порту
+  const expoUrl = `exp://${hostname}:${PORT}`;
   
   // URL для генерации QR-кода через онлайн API
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(expoUrl)}`;
@@ -277,7 +277,7 @@ function startMetro() {
     'expo',
     'start',
     '--host', 'lan', // Используем 'lan' так как Expo CLI не поддерживает '0.0.0.0'
-    '--port', METRO_PORT.toString(),
+    '--port', PORT.toString(), // Metro использует тот же порт что и Express (8080)
     '--no-dev', // Отключаем dev режим для продакшена
     '--minify'  // Минификация для продакшена
   ];
