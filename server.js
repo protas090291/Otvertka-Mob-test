@@ -12,7 +12,9 @@ const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-const METRO_PORT = process.env.METRO_PORT || 8081;
+// Metro Bundler использует тот же порт что и Express (8080)
+// Это нужно для того, чтобы порт был открыт извне в Time Web Cloud
+const METRO_PORT = process.env.METRO_PORT || PORT;
 
 // Флаг готовности Metro Bundler
 let metroReady = false;
@@ -222,7 +224,7 @@ const metroProxy = createProxyMiddleware({
 // Функция проверки доступности Metro Bundler
 function checkMetroHealth() {
   return new Promise((resolve) => {
-    const req = http.get(`http://localhost:${METRO_PORT}/status`, { timeout: 2000 }, (res) => {
+    const req = http.get(`http://localhost:${PORT}/status`, { timeout: 2000 }, (res) => {
       if (res.statusCode === 200) {
         resolve(true);
       } else {
