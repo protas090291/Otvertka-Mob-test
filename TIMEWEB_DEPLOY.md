@@ -9,6 +9,12 @@
 
 ## 📋 Настройки для Time Web Cloud
 
+### ⚠️ ВАЖНО: Выбор фреймворка в панели Time Web Cloud
+
+**В настройках приложения выберите:**
+- **Фреймворк:** `Node.js` или `Express` (НЕ React Native!)
+- Это Node.js приложение с Express сервером, который запускает Metro Bundler
+
 ### 1. Команда сборки (Build Command)
 ```
 npm install
@@ -25,7 +31,10 @@ npm install
 node server.js
 ```
 
-**Важно:** Используйте `node server.js` вместо `npx expo start`!
+**КРИТИЧЕСКИ ВАЖНО:** 
+- ✅ Используйте `node server.js` (Express сервер)
+- ❌ НЕ используйте `npx expo start` (это только для локальной разработки)
+- ❌ НЕ используйте `npm start` если он указывает на expo start
 
 Express сервер (`server.js`) автоматически:
 - Запускает Metro Bundler на порту 8081
@@ -42,14 +51,23 @@ Express сервер (`server.js`) автоматически:
 
 Добавьте следующие переменные:
 
-| Переменная | Значение |
-|-----------|----------|
-| `NODE_ENV` | `production` |
-| `PORT` | `8080` |
-| `METRO_PORT` | `8081` |
-| `EXPO_NO_DOTENV` | `1` |
-| `EXPO_DEVTOOLS_LISTEN_ADDRESS` | `0.0.0.0` |
-| `NODE_OPTIONS` | `--max-old-space-size=4096` |
+| Переменная | Значение | Описание |
+|-----------|----------|----------|
+| `NODE_ENV` | `production` | Режим продакшена |
+| `PORT` | `8080` | Порт Express сервера (для health check) |
+| `METRO_PORT` | `8081` | Порт Metro Bundler (для Expo Go) |
+| `EXPO_NO_DOTENV` | `1` | Отключить .env файлы |
+| `EXPO_DEVTOOLS_LISTEN_ADDRESS` | `0.0.0.0` | Слушать на всех интерфейсах |
+| `NODE_OPTIONS` | `--max-old-space-size=4096` | Увеличить память для Node.js |
+
+### 6. Исправление уязвимостей зависимостей
+
+После первого деплоя выполните на сервере (через SSH):
+```bash
+npm audit fix
+```
+
+Это обновит безопасные версии зависимостей без breaking changes.
 
 ## 🔧 После развертывания
 
