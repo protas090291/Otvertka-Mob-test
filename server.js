@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /**
  * Скрипт для запуска Metro Bundler на Time Web Cloud
- * Metro Bundler работает напрямую на порту 8080
+ * Metro Bundler работает на порту 8081 (внутренний порт)
+ * Nginx проксирует запросы с порта 80 на порт 8081
  */
 
 const { spawn } = require('child_process');
 
-const PORT = process.env.PORT || 8080;
+const METRO_PORT = process.env.METRO_PORT || 8081; // Внутренний порт для Metro (nginx проксирует с 80)
 
 // Флаг готовности Metro Bundler
 let metroReady = false;
@@ -14,7 +15,7 @@ let metroProcess = null;
 
 // Логирование для отладки
 console.log('🚀 Инициализация Metro Bundler...');
-console.log(`📡 PORT: ${PORT}`);
+console.log(`📡 METRO_PORT: ${METRO_PORT} (внутренний порт для nginx)`);
 
 // Запускаем Metro Bundler как дочерний процесс
 function startMetro() {
@@ -30,7 +31,8 @@ function startMetro() {
     'expo',
     'start',
     '--host', 'lan', // Используем 'lan' так как Expo CLI не поддерживает '0.0.0.0'
-    '--port', PORT.toString() // Metro использует порт 8080
+    '--port', METRO_PORT.toString(), // Metro использует порт 8081 (внутренний)
+    '--clear' // Очистка кеша при запуске
   ];
 
   // Создаем env без CI переменных (Time Web Cloud может устанавливать CI=true)
@@ -96,9 +98,10 @@ function startMetro() {
 }
 
 // Запускаем Metro Bundler напрямую
-console.log(`🚀 Запуск Metro Bundler на порту ${PORT}...`);
-console.log(`📡 Health check: http://0.0.0.0:${PORT}/status`);
-console.log(`🌐 Metro Bundler будет доступен на порту ${PORT}`);
+console.log(`🚀 Запуск Metro Bundler на порту ${METRO_PORT}...`);
+console.log(`📡 Health check: http://localhost:${METRO_PORT}/status`);
+console.log(`🌐 Metro Bundler будет доступен через nginx на порту 80`);
+console.log(`🔗 Nginx проксирует порт 80 → порт ${METRO_PORT}`);
 
 // Запускаем Metro Bundler
 startMetro();
