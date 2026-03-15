@@ -272,7 +272,7 @@ function startMetro() {
   const metroArgs = [
     'expo',
     'start',
-    '--host', 'lan',
+    '--host', '0.0.0.0', // Слушаем на всех интерфейсах для доступа извне
     '--port', METRO_PORT.toString(),
     '--no-dev', // Отключаем dev режим для продакшена
     '--minify'  // Минификация для продакшена
