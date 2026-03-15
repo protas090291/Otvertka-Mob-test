@@ -46,10 +46,149 @@ app.get('/', (req, res) => {
     message: 'Expo Metro Bundler Proxy Server',
     endpoints: {
       health: '/status',
+      qr: '/qr',
       metro: `http://localhost:${METRO_PORT}`
     },
     metro_ready: metroReady
   });
+});
+
+// QR Code endpoint для Expo Go
+app.get('/qr', (req, res) => {
+  // Определяем домен из запроса или используем переменную окружения
+  const host = req.get('host') || process.env.SERVER_HOST || 'protas090291-otvertka-mob-test-beaf.twc1.net';
+  const hostname = host.split(':')[0]; // Убираем порт если есть
+  const expoUrl = `exp://${hostname}:${METRO_PORT}`;
+  
+  // URL для генерации QR-кода через онлайн API
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(expoUrl)}`;
+  
+  // Возвращаем HTML страницу с QR-кодом
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>QR Code для Expo Go</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta charset="UTF-8">
+      <style>
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          min-height: 100vh;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          padding: 20px;
+        }
+        .container {
+          text-align: center;
+          max-width: 500px;
+          width: 100%;
+        }
+        h1 {
+          margin-bottom: 10px;
+          font-size: 28px;
+        }
+        .subtitle {
+          margin-bottom: 30px;
+          opacity: 0.9;
+          font-size: 16px;
+        }
+        .qr-code {
+          margin: 20px 0;
+          padding: 30px;
+          background: white;
+          border-radius: 20px;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .qr-code img {
+          max-width: 100%;
+          height: auto;
+          display: block;
+          margin: 0 auto;
+        }
+        .url {
+          margin-top: 25px;
+          padding: 15px;
+          background: rgba(255,255,255,0.2);
+          border-radius: 10px;
+          word-break: break-all;
+          font-family: 'Courier New', monospace;
+          font-size: 14px;
+          backdrop-filter: blur(10px);
+        }
+        .instructions {
+          margin-top: 30px;
+          padding: 25px;
+          background: rgba(255,255,255,0.15);
+          border-radius: 15px;
+          text-align: left;
+          backdrop-filter: blur(10px);
+        }
+        .instructions h3 {
+          margin-bottom: 15px;
+          font-size: 18px;
+        }
+        .instructions ol {
+          margin-left: 20px;
+          line-height: 1.8;
+        }
+        .instructions li {
+          margin-bottom: 8px;
+        }
+        .status {
+          margin-top: 20px;
+          padding: 10px;
+          border-radius: 8px;
+          font-size: 14px;
+        }
+        .status.ready {
+          background: rgba(76, 175, 80, 0.3);
+        }
+        .status.not-ready {
+          background: rgba(255, 152, 0, 0.3);
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>📱 QR Code для Expo Go</h1>
+        <p class="subtitle">Отсканируйте QR-код в приложении Expo Go</p>
+        
+        <div class="qr-code">
+          <img src="${qrCodeUrl}" alt="QR Code для ${expoUrl}" />
+        </div>
+        
+        <div class="url">
+          <strong>Expo URL:</strong><br>
+          <code>${expoUrl}</code>
+        </div>
+        
+        <div class="status ${metroReady ? 'ready' : 'not-ready'}">
+          ${metroReady ? '✅ Metro Bundler готов' : '⏳ Metro Bundler загружается...'}
+        </div>
+        
+        <div class="instructions">
+          <h3>📋 Инструкция:</h3>
+          <ol>
+            <li>Откройте приложение <strong>Expo Go</strong> на iPhone</li>
+            <li>Нажмите кнопку <strong>"Scan QR Code"</strong></li>
+            <li>Наведите камеру на QR-код выше</li>
+            <li>Дождитесь загрузки приложения</li>
+          </ol>
+        </div>
+      </div>
+    </body>
+    </html>
+  `);
 });
 
 // Проксируем все остальные запросы к Metro Bundler
@@ -95,10 +234,10 @@ function checkMetroHealth() {
   });
 }
 
-// Применяем прокси ко всем запросам кроме health check
+// Применяем прокси ко всем запросам кроме health check и QR
 app.use(async (req, res, next) => {
   // Health check endpoints всегда доступны
-  if (req.path === '/status' || req.path === '/health' || req.path === '/') {
+  if (req.path === '/status' || req.path === '/health' || req.path === '/' || req.path === '/qr') {
     return next();
   }
   
