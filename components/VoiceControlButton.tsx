@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, Animated, Dimensions, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { RadialGradient as SvgRadialGradient, Defs, Stop, Line, Circle } from 'react-native-svg';
@@ -17,6 +17,8 @@ const VoiceControlButton: React.FC<VoiceControlButtonProps> = ({ isListening: ex
   const [isListening, setIsListening] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const rayOpacity = useRef(new Animated.Value(1)).current;
+
+  const enableSvgRadialGradients = Platform.OS !== 'android';
 
   // Используем внешнее состояние, если оно передано
   const listening = externalIsListening !== undefined ? externalIsListening : isListening;
@@ -118,21 +120,23 @@ const VoiceControlButton: React.FC<VoiceControlButtonProps> = ({ isListening: ex
               height={buttonHeight} 
               width={buttonWidth}
             >
-              <Defs>
-                {/* Радиальный градиент для glow-эффекта */}
-                <SvgRadialGradient id="glowGrad" cx="50%" cy="50%" r="70%" fx="50%" fy="50%">
-                  <Stop offset="0%" stopColor="#FFB6C1" stopOpacity="0.5" />
-                  <Stop offset="50%" stopColor="#ADD8E6" stopOpacity="0.2" />
-                  <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
-                </SvgRadialGradient>
-                {/* Градиент для лучей */}
-                <SvgRadialGradient id="rayGrad" cx="50%" cy="50%" r="80%" fx="50%" fy="50%">
-                  <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.9" />
-                  <Stop offset="30%" stopColor="#FFB6C1" stopOpacity="0.6" />
-                  <Stop offset="60%" stopColor="#ADD8E6" stopOpacity="0.3" />
-                  <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
-                </SvgRadialGradient>
-              </Defs>
+              {enableSvgRadialGradients ? (
+                <Defs>
+                  {/* Радиальный градиент для glow-эффекта */}
+                  <SvgRadialGradient id="glowGrad" cx="50%" cy="50%" r="70%" fx="50%" fy="50%">
+                    <Stop offset="0%" stopColor="#FFB6C1" stopOpacity="0.5" />
+                    <Stop offset="50%" stopColor="#ADD8E6" stopOpacity="0.2" />
+                    <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+                  </SvgRadialGradient>
+                  {/* Градиент для лучей */}
+                  <SvgRadialGradient id="rayGrad" cx="50%" cy="50%" r="80%" fx="50%" fy="50%">
+                    <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.9" />
+                    <Stop offset="30%" stopColor="#FFB6C1" stopOpacity="0.6" />
+                    <Stop offset="60%" stopColor="#ADD8E6" stopOpacity="0.3" />
+                    <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+                  </SvgRadialGradient>
+                </Defs>
+              ) : null}
               
               {/* Glow-эффект убран для однотонного фона */}
 
@@ -144,8 +148,9 @@ const VoiceControlButton: React.FC<VoiceControlButtonProps> = ({ isListening: ex
                   y1={ray.y1}
                   x2={ray.x2}
                   y2={ray.y2}
-                  stroke="url(#rayGrad)"
+                  stroke={enableSvgRadialGradients ? 'url(#rayGrad)' : '#FFFFFF'}
                   strokeWidth={ray.strokeWidth}
+                  opacity={enableSvgRadialGradients ? 1 : 0.35}
                 />
               ))}
             </Svg>

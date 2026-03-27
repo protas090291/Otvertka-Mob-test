@@ -14,15 +14,7 @@ try {
 
 // Условный импорт Voice - только если не в Expo Go
 let Voice: any = null;
-try {
-  // Проверяем, не в Expo Go ли мы
-  const isExpoGo = Constants?.executionEnvironment === 'storeClient';
-  if (!isExpoGo && Constants) {
-    Voice = require('@react-native-voice/voice').default;
-  }
-} catch (e) {
-  console.warn('⚠️ @react-native-voice/voice недоступен:', e);
-}
+Voice = null;
 
 interface VoiceCommandButtonProps {
   navigation: any;
