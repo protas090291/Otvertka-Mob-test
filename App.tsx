@@ -7,11 +7,13 @@ import './polyfills';
 import React from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import type { UserProfile } from './lib/authApi';
 
 export default function App() {
   const [mode, setMode] = React.useState<'menu' | 'login' | 'nav'>('menu');
   const [authResult, setAuthResult] = React.useState<string>('');
   const [busy, setBusy] = React.useState<boolean>(false);
+  const [loggedInUser, setLoggedInUser] = React.useState<UserProfile | null>(null);
 
   const runGetCurrentUser = async () => {
     setBusy(true);
@@ -47,6 +49,8 @@ export default function App() {
     </Pressable>
   );
 
+  const canRenderNavigator = Boolean(loggedInUser);
+
   if (mode === 'login') {
     try {
       const LoginScreen = (require('./screens/LoginScreen').default as any) || null;
@@ -54,7 +58,13 @@ export default function App() {
         return (
           <>
             <StatusBar style="light" />
-            <LoginScreen onLogin={() => setMode('menu')} />
+            <LoginScreen
+              onLogin={(user: UserProfile) => {
+                setLoggedInUser(user);
+                setAuthResult(JSON.stringify({ user }, null, 2));
+                setMode('menu');
+              }}
+            />
           </>
         );
       }
@@ -81,7 +91,14 @@ export default function App() {
         return (
           <>
             <StatusBar style="light" />
-            <AppNavigator userRole="test" currentUser={{ role: 'test' }} onLogout={() => setMode('menu')} />
+            <AppNavigator
+              userRole={loggedInUser?.role ?? 'user'}
+              currentUser={loggedInUser ?? ({ role: 'user' } as any)}
+              onLogout={() => {
+                setLoggedInUser(null);
+                setMode('menu');
+              }}
+            />
           </>
         );
       }
@@ -112,7 +129,16 @@ export default function App() {
 
         <View style={{ marginTop: 16 }}>
           <Button title="Render LoginScreen" onPress={() => setMode('login')} />
-          <Button title="Render AppNavigator" onPress={() => setMode('nav')} />
+          <Button
+            title={canRenderNavigator ? 'Render AppNavigator' : 'Render AppNavigator (login first)'}
+            onPress={() => {
+              if (!canRenderNavigator) {
+                setAuthResult('Login first: open LoginScreen and sign in successfully, then render AppNavigator.');
+                return;
+              }
+              setMode('nav');
+            }}
+          />
           <Button title="Run getCurrentUser()" onPress={runGetCurrentUser} />
         </View>
 
