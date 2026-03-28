@@ -4,149 +4,88 @@ import 'react-native-gesture-handler';
 // Импортируем polyfills первыми для Android совместимости
 import './polyfills';
 
-import React from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import type { UserProfile } from './lib/authApi';
+
+import AppNavigator from './navigation/AppNavigator';
+import ErrorBoundary from './components/ErrorBoundary';
+import LoginScreen from './screens/LoginScreen';
+import { getCurrentUser, signOut, UserProfile } from './lib/authApi';
+import { Theme } from './constants/Theme';
 
 export default function App() {
-  const [mode, setMode] = React.useState<'menu' | 'login' | 'nav'>('menu');
-  const [authResult, setAuthResult] = React.useState<string>('');
-  const [busy, setBusy] = React.useState<boolean>(false);
-  const [loggedInUser, setLoggedInUser] = React.useState<UserProfile | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const runGetCurrentUser = async () => {
-    setBusy(true);
-    setAuthResult('Running getCurrentUser...');
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    setIsLoading(true);
     try {
-      const authApi = require('./lib/authApi') as any;
-      const res = await authApi.getCurrentUser();
-      setAuthResult(JSON.stringify(res, null, 2));
-    } catch (e: any) {
-      setAuthResult(e?.stack ? String(e.stack) : String(e));
+      if (Platform.OS === 'android') {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      const { user, error } = await getCurrentUser();
+      if (error || !user) {
+        setCurrentUser(null);
+      } else {
+        setCurrentUser(user);
+      }
+    } catch (error: any) {
+      console.error('Ошибка проверки авторизации:', error);
+      setCurrentUser(null);
     } finally {
-      setBusy(false);
+      setIsLoading(false);
     }
   };
 
-  const Button = ({ title, onPress }: { title: string; onPress: () => void }) => (
-    <Pressable
-      onPress={onPress}
-      disabled={busy}
-      style={({ pressed }) => ({
-        width: '100%',
-        paddingVertical: 14,
-        paddingHorizontal: 16,
-        borderRadius: 10,
-        backgroundColor: pressed ? '#1F2937' : '#111827',
-        borderWidth: 1,
-        borderColor: '#374151',
-        opacity: busy ? 0.6 : 1,
-        marginTop: 10,
-      })}
-    >
-      <Text style={{ color: '#E5E7EB', fontSize: 16, fontWeight: '700', textAlign: 'center' }}>{title}</Text>
-    </Pressable>
-  );
+  const handleLogin = (user: UserProfile) => {
+    setCurrentUser(user);
+  };
 
-  const canRenderNavigator = Boolean(loggedInUser);
+  const handleLogout = async () => {
+    await signOut();
+    setCurrentUser(null);
+  };
 
-  if (mode === 'login') {
-    try {
-      const LoginScreen = (require('./screens/LoginScreen').default as any) || null;
-      if (LoginScreen) {
-        return (
-          <>
-            <StatusBar style="light" />
-            <LoginScreen
-              onLogin={(user: UserProfile) => {
-                setLoggedInUser(user);
-                setAuthResult(JSON.stringify({ user }, null, 2));
-                setMode('menu');
-              }}
-            />
-          </>
-        );
-      }
-    } catch (e: any) {
-      return (
-        <>
-          <StatusBar style="light" />
-          <View style={{ flex: 1, backgroundColor: '#000000', padding: 16, paddingTop: 60 }}>
-            <Text style={{ color: '#FCA5A5', fontSize: 18, fontWeight: '700' }}>LoginScreen load error</Text>
-            <ScrollView style={{ marginTop: 12 }}>
-              <Text style={{ color: '#FFFFFF' }}>{e?.stack ? String(e.stack) : String(e)}</Text>
-            </ScrollView>
-            <Button title="Back to menu" onPress={() => setMode('menu')} />
-          </View>
-        </>
-      );
-    }
+  if (isLoading) {
+    return (
+      <>
+        <StatusBar style="light" />
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: Theme.colors.background,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <ActivityIndicator size="large" color={Theme.colors.primary} />
+          <Text style={{ color: Theme.colors.text, marginTop: 16 }}>Загрузка...</Text>
+        </View>
+      </>
+    );
   }
 
-  if (mode === 'nav') {
-    try {
-      const AppNavigator = (require('./navigation/AppNavigator').default as any) || null;
-      if (AppNavigator) {
-        return (
-          <>
-            <StatusBar style="light" />
-            <AppNavigator
-              userRole={loggedInUser?.role ?? 'user'}
-              currentUser={loggedInUser ?? ({ role: 'user' } as any)}
-              onLogout={() => {
-                setLoggedInUser(null);
-                setMode('menu');
-              }}
-            />
-          </>
-        );
-      }
-    } catch (e: any) {
-      return (
-        <>
-          <StatusBar style="light" />
-          <View style={{ flex: 1, backgroundColor: '#000000', padding: 16, paddingTop: 60 }}>
-            <Text style={{ color: '#FCA5A5', fontSize: 18, fontWeight: '700' }}>AppNavigator load error</Text>
-            <ScrollView style={{ marginTop: 12 }}>
-              <Text style={{ color: '#FFFFFF' }}>{e?.stack ? String(e.stack) : String(e)}</Text>
-            </ScrollView>
-            <Button title="Back to menu" onPress={() => setMode('menu')} />
-          </View>
-        </>
-      );
-    }
+  if (!currentUser) {
+    return (
+      <>
+        <StatusBar style="light" />
+        <ErrorBoundary>
+          <LoginScreen onLogin={handleLogin} />
+        </ErrorBoundary>
+      </>
+    );
   }
 
   return (
-    <>
+    <ErrorBoundary>
       <StatusBar style="light" />
-      <View style={{ flex: 1, backgroundColor: '#000000', padding: 16, paddingTop: 60 }}>
-        <Text style={{ color: '#00FF00', fontSize: 22, fontWeight: '800', textAlign: 'center' }}>DIAG MENU</Text>
-        <Text style={{ color: '#FFFFFF', marginTop: 10, fontSize: 14, textAlign: 'center' }}>
-          Нажимай по одному пункту. Где снова станет серый экран/краш — там и виновник.
-        </Text>
-
-        <View style={{ marginTop: 16 }}>
-          <Button title="Render LoginScreen" onPress={() => setMode('login')} />
-          <Button
-            title={canRenderNavigator ? 'Render AppNavigator' : 'Render AppNavigator (login first)'}
-            onPress={() => {
-              if (!canRenderNavigator) {
-                setAuthResult('Login first: open LoginScreen and sign in successfully, then render AppNavigator.');
-                return;
-              }
-              setMode('nav');
-            }}
-          />
-          <Button title="Run getCurrentUser()" onPress={runGetCurrentUser} />
-        </View>
-
-        <ScrollView style={{ marginTop: 16, borderRadius: 10, borderWidth: 1, borderColor: '#374151', padding: 12 }}>
-          <Text style={{ color: '#93C5FD', fontSize: 12, fontWeight: '700' }}>OUTPUT</Text>
-          <Text style={{ color: '#E5E7EB', marginTop: 8, fontSize: 12 }}>{authResult || '(empty)'}</Text>
-        </ScrollView>
-      </View>
-    </>
+      <AppNavigator userRole={currentUser.role} currentUser={currentUser} onLogout={handleLogout} />
+    </ErrorBoundary>
   );
 }
