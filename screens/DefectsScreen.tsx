@@ -10,7 +10,8 @@ import Card from '../components/Card';
 import DefectForm from '../components/DefectForm';
 import { Theme } from '../constants/Theme';
 import { UserRole, Defect } from '../types';
-import { getAllDefects, getActiveDefects, getDefectsByApartment, createDefect, updateDefect, deleteDefect, uploadDefectPhoto, DefectInput, DefectUpdate } from '../lib/defectsApi';
+import { getAllDefects, getActiveDefects, getDefectsByApartment, createDefect, updateDefect, updateDefectAsAdmin, deleteDefect, uploadDefectPhoto, DefectInput, DefectUpdate } from '../lib/defectsApi';
+import { UserProfile } from '../lib/authApi';
 
 interface DefectsScreenProps {
   navigation: any;
@@ -19,17 +20,55 @@ interface DefectsScreenProps {
 
 const DefectsScreen: React.FC<DefectsScreenProps> = ({ navigation, route }) => {
   const userRole: UserRole = route.params?.userRole || 'technadzor';
+  const currentUser: UserProfile | undefined = route.params?.currentUser;
   const [apartmentFilter, setApartmentFilter] = useState<string | undefined>(route.params?.apartmentFilter);
   const [defects, setDefects] = useState<Defect[]>([]);
+  const [allDefects, setAllDefects] = useState<Defect[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showDefectForm, setShowDefectForm] = useState(false);
   const [editingDefect, setEditingDefect] = useState<Defect | null>(null);
   const [failedImageUrls, setFailedImageUrls] = useState<Set<string>>(new Set());
+  const [defectsFilterMode, setDefectsFilterMode] = useState<'my' | 'all'>('my');
+
+  const currentUserDisplayName = React.useMemo(() => {
+    const fullName = currentUser?.full_name?.trim();
+    if (fullName) return fullName;
+    const email = (currentUser?.email || '').trim();
+    if (!email) return '';
+    return email.split('@')[0] || '';
+  }, [currentUser?.email, currentUser?.full_name]);
+
+  const applyAssigneeFilter = React.useCallback(
+    (items: Defect[]) => {
+      if (defectsFilterMode === 'all') return items;
+      const myId = currentUser?.id;
+      if (myId) {
+        const byId = items.filter((d) => String(d.assignedToId || '') === String(myId));
+        if (byId.length > 0) return byId;
+      }
+      const me = currentUserDisplayName.trim().toLocaleLowerCase();
+      if (!me) return items;
+      return items.filter((d) => ((d.assignedToName || d.assignedTo || '')).trim().toLocaleLowerCase() === me);
+    },
+    [currentUser?.id, currentUserDisplayName, defectsFilterMode]
+  );
   
   const handleOpenPlan = () => {
     navigation.navigate('BuildingSelection', { userRole });
   };
+
+  const canDeleteDefect = React.useCallback(
+    (defect: Defect) => {
+      if (userRole === 'admin') return true;
+      const me = currentUser?.id;
+      if (!me) return false;
+      const creator = defect.createdById;
+      if (!creator) return false;
+      return String(creator) === String(me);
+    },
+    [currentUser?.id, userRole]
+  );
 
   const loadDefects = async () => {
     try {
@@ -68,7 +107,7 @@ const DefectsScreen: React.FC<DefectsScreenProps> = ({ navigation, route }) => {
       const defectsWithPhotos = data.filter(d => {
         const hasPhoto = d.photoUrl && d.photoUrl.trim() !== '';
         if (hasPhoto) {
-          const isValidUrl = d.photoUrl.startsWith('http://') || d.photoUrl.startsWith('https://');
+          const isValidUrl = (d.photoUrl?.startsWith('http://') || d.photoUrl?.startsWith('https://')) ?? false;
           if (!isValidUrl) {
             console.warn('⚠️ Невалидный URL фото для дефекта:', d.id, 'URL:', d.photoUrl);
           }
@@ -77,14 +116,19 @@ const DefectsScreen: React.FC<DefectsScreenProps> = ({ navigation, route }) => {
         return false;
       });
       console.log('📸 Дефекты с валидными фото URL:', defectsWithPhotos.length);
-      
-      setDefects(data);
+
+      setAllDefects(data);
+      setDefects(applyAssigneeFilter(data));
     } catch (error) {
       console.error('❌ Ошибка загрузки дефектов:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    setDefects(applyAssigneeFilter(allDefects));
+  }, [allDefects, applyAssigneeFilter]);
 
   // Обновляем фильтр при изменении параметров маршрута
   useEffect(() => {
@@ -126,37 +170,26 @@ const DefectsScreen: React.FC<DefectsScreenProps> = ({ navigation, route }) => {
       if (result) {
         console.log('✅ Дефект создан:', result);
         
-        // Если в defectData есть photoUri, загружаем фото
-        if ((defectData as any).photoUri) {
+        const photoUris: string[] = (defectData as any).photoUris || ((defectData as any).photoUri ? [(defectData as any).photoUri] : []);
+        if (photoUris.length > 0) {
           console.log('📸 Начало загрузки фото для нового дефекта:', {
             defectId: result.id,
-            photoUri: (defectData as any).photoUri
+            count: photoUris.length,
           });
+
           try {
-            const photoUrl = await uploadDefectPhoto((defectData as any).photoUri, result.id);
-            console.log('📸 URL фото получен:', photoUrl);
-            
-            if (photoUrl) {
-              // Обновляем дефект с URL фото
-              console.log('🔄 Обновление дефекта с URL фото:', photoUrl);
-              const updated = await updateDefect(result.id, { photo_url: photoUrl } as any);
-              console.log('✅ Дефект обновлен с фото:', updated);
-              console.log('📸 photoUrl в обновленном дефекте:', {
-                photoUrl: updated?.photoUrl,
-                expectedUrl: photoUrl,
-                match: updated?.photoUrl === photoUrl
-              });
-              
-              if (updated?.photoUrl !== photoUrl) {
-                console.error('❌ КРИТИЧЕСКАЯ ОШИБКА: URL не совпадает!');
-                console.error('Ожидалось:', photoUrl);
-                console.error('Получено:', updated?.photoUrl);
-              }
-              
-              // Небольшая задержка перед перезагрузкой, чтобы Supabase успел обработать обновление
+            const uploadedUrls: string[] = [];
+            for (const uri of photoUris) {
+              const url = await uploadDefectPhoto(uri, result.id, { folderPrefix: result.id });
+              if (url) uploadedUrls.push(url);
+            }
+
+            const coverUrl = uploadedUrls[0] || null;
+            if (coverUrl) {
+              console.log('🔄 Обновление дефекта обложкой (photo_url):', coverUrl);
+              await updateDefectAsAdmin(result.id, { photo_url: coverUrl } as any);
               await new Promise(resolve => setTimeout(resolve, 1000));
             } else {
-              console.error('❌ Не удалось получить URL фото');
               Alert.alert('Предупреждение', 'Дефект создан, но фото не удалось загрузить');
             }
           } catch (error) {
@@ -174,9 +207,10 @@ const DefectsScreen: React.FC<DefectsScreenProps> = ({ navigation, route }) => {
         console.error('❌ createDefect вернул null');
         Alert.alert('Ошибка', 'Не удалось создать дефект');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Ошибка создания дефекта:', error);
-      Alert.alert('Ошибка', 'Не удалось создать дефект');
+      const message = error?.message ? String(error.message) : 'Не удалось создать дефект';
+      Alert.alert('Ошибка', message);
     }
   };
 
@@ -185,20 +219,19 @@ const DefectsScreen: React.FC<DefectsScreenProps> = ({ navigation, route }) => {
     try {
       console.log('🔄 Обновление дефекта:', editingDefect.id, defectData);
       
-      // Если есть новое фото, загружаем его
-      if ((defectData as any).photoUri) {
-        console.log('📸 Загрузка нового фото для дефекта:', editingDefect.id);
-        const photoUrl = await uploadDefectPhoto((defectData as any).photoUri, editingDefect.id);
-        console.log('📸 URL фото получен:', photoUrl);
-        
-        if (photoUrl) {
-          defectData.photo_url = photoUrl;
-          console.log('✅ URL фото добавлен в данные обновления');
-        } else {
-          console.error('❌ Не удалось получить URL фото');
+      const photoUris: string[] = (defectData as any).photoUris || ((defectData as any).photoUri ? [(defectData as any).photoUri] : []);
+      if (photoUris.length > 0) {
+        console.log('📸 Загрузка новых фото для дефекта:', { defectId: editingDefect.id, count: photoUris.length });
+        const uploadedUrls: string[] = [];
+        for (const uri of photoUris) {
+          const url = await uploadDefectPhoto(uri, editingDefect.id, { folderPrefix: editingDefect.id });
+          if (url) uploadedUrls.push(url);
         }
-        // Удаляем photoUri из данных перед обновлением
+        if (uploadedUrls[0]) {
+          defectData.photo_url = uploadedUrls[0];
+        }
         delete (defectData as any).photoUri;
+        delete (defectData as any).photoUris;
       }
       
       console.log('📝 Данные для обновления:', defectData);
@@ -316,7 +349,12 @@ const DefectsScreen: React.FC<DefectsScreenProps> = ({ navigation, route }) => {
           }
           return (
             <>
-              <Header userRole={userRole} title={apartmentFilter ? `Дефекты: ${displayApartment}` : "Дефекты"} />
+              <Header
+                userRole={userRole}
+                title={apartmentFilter ? `Дефекты: ${displayApartment}` : "Дефекты"}
+                currentUserId={currentUser?.id}
+                onNotificationPress={() => navigation.navigate('Notifications')}
+              />
               {apartmentFilter && (
                 <View style={styles.filterBanner}>
                   <Ionicons name="home" size={16} color={Theme.colors.primary} />
@@ -343,6 +381,21 @@ const DefectsScreen: React.FC<DefectsScreenProps> = ({ navigation, route }) => {
             <Ionicons name="map-outline" size={20} color={Theme.colors.primary} />
             <Text style={styles.planButtonText}>План квартиры</Text>
           </TouchableOpacity>
+
+          <View style={styles.defectsFilterContainer}>
+            <TouchableOpacity
+              style={[styles.defectsFilterButton, defectsFilterMode === 'my' ? styles.defectsFilterButtonActive : null]}
+              onPress={() => setDefectsFilterMode('my')}
+            >
+              <Text style={[styles.defectsFilterButtonText, defectsFilterMode === 'my' ? styles.defectsFilterButtonTextActive : null]}>Мои</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.defectsFilterButton, defectsFilterMode === 'all' ? styles.defectsFilterButtonActive : null]}
+              onPress={() => setDefectsFilterMode('all')}
+            >
+              <Text style={[styles.defectsFilterButtonText, defectsFilterMode === 'all' ? styles.defectsFilterButtonTextActive : null]}>Все</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         <ScrollView 
           style={styles.scrollView} 
@@ -375,7 +428,7 @@ const DefectsScreen: React.FC<DefectsScreenProps> = ({ navigation, route }) => {
                       <TouchableOpacity
                         style={styles.defectTitleContainer}
                         onPress={() => {
-                          navigation.navigate('DefectDetail', { defect, userRole });
+                          navigation.navigate('DefectDetail', { defect, userRole, currentUser });
                         }}
                         activeOpacity={0.7}
                       >
@@ -390,18 +443,14 @@ const DefectsScreen: React.FC<DefectsScreenProps> = ({ navigation, route }) => {
                              defect.severity === 'medium' ? 'Средний' : 'Низкий'}
                           </Text>
                         </View>
-                        <TouchableOpacity
-                          style={styles.editButton}
-                          onPress={() => openEditForm(defect)}
-                        >
-                          <Ionicons name="create-outline" size={20} color={Theme.colors.primary} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.deleteButton}
-                          onPress={() => handleDeleteDefect(defect.id)}
-                        >
-                          <Ionicons name="trash-outline" size={20} color={Theme.colors.error} />
-                        </TouchableOpacity>
+                        {canDeleteDefect(defect) ? (
+                          <TouchableOpacity
+                            style={styles.deleteButton}
+                            onPress={() => handleDeleteDefect(defect.id)}
+                          >
+                            <Ionicons name="trash-outline" size={20} color={Theme.colors.error} />
+                          </TouchableOpacity>
+                        ) : null}
                       </View>
                     </View>
                     {defect.description ? (
@@ -449,18 +498,24 @@ const DefectsScreen: React.FC<DefectsScreenProps> = ({ navigation, route }) => {
                           <Text style={styles.detailText}>{defect.location}</Text>
                         </View>
                       ) : null}
+                      {defect.createdByName ? (
+                        <View style={styles.detailRow}>
+                          <Ionicons name="person-outline" size={16} color={Theme.colors.textSecondary} />
+                          <Text style={styles.detailText}>{defect.createdByName}</Text>
+                        </View>
+                      ) : null}
+                      {defect.assignedTo ? (
+                        <View style={styles.detailRow}>
+                          <Ionicons name="person-outline" size={16} color={Theme.colors.textSecondary} />
+                          <Text style={styles.detailText}>{defect.assignedToName || defect.assignedTo}</Text>
+                        </View>
+                      ) : null}
                       <View style={styles.detailRow}>
                         <Ionicons name="time-outline" size={16} color={Theme.colors.textSecondary} />
                         <Text style={styles.detailText}>
                           {new Date(defect.reportedDate).toLocaleDateString('ru')}
                         </Text>
                       </View>
-                      {defect.reportedBy ? (
-                        <View style={styles.detailRow}>
-                          <Ionicons name="person-outline" size={16} color={Theme.colors.textSecondary} />
-                          <Text style={styles.detailText}>{defect.reportedBy}</Text>
-                        </View>
-                      ) : null}
                     </View>
                     <View style={styles.statusContainer}>
                       <View style={[styles.statusBadge, { backgroundColor: `${statusColor}20` }]}>
@@ -481,7 +536,13 @@ const DefectsScreen: React.FC<DefectsScreenProps> = ({ navigation, route }) => {
         visible={showDefectForm}
         defect={editingDefect}
         onClose={closeForm}
-        onSubmit={editingDefect ? handleUpdateDefect : handleCreateDefect}
+        onSubmit={async (data) => {
+          if (editingDefect) {
+            await handleUpdateDefect(data as DefectUpdate);
+          } else {
+            await handleCreateDefect(data as DefectInput);
+          }
+        }}
       />
     </View>
   );
@@ -584,7 +645,7 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Theme.spacing.md,
     paddingTop: Theme.spacing.md,
@@ -592,7 +653,32 @@ const styles = StyleSheet.create({
     marginTop: Theme.spacing.sm,
     gap: Theme.spacing.sm,
   },
+  defectsFilterContainer: {
+    flexDirection: 'row',
+    backgroundColor: Theme.colors.cardBackground,
+    borderRadius: Theme.borderRadius.lg,
+    borderWidth: 1.5,
+    borderColor: Theme.colors.primary,
+    overflow: 'hidden',
+  },
+  defectsFilterButton: {
+    paddingHorizontal: Theme.spacing.md,
+    paddingVertical: Theme.spacing.md,
+  },
+  defectsFilterButtonActive: {
+    backgroundColor: Theme.colors.primary,
+  },
+  defectsFilterButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Theme.colors.primary,
+    letterSpacing: 0.3,
+  },
+  defectsFilterButtonTextActive: {
+    color: Theme.colors.background,
+  },
   planButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

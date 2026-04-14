@@ -3,6 +3,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
+import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
 import { UserRole } from '../types';
 import { UserProfile } from '../lib/authApi';
@@ -20,6 +22,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import ApartmentPlanScreen from '../screens/ApartmentPlanScreen';
 import BuildingSelectionScreen from '../screens/BuildingSelectionScreen';
 import ProjectApartmentsScreen from '../screens/ProjectApartmentsScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -31,6 +34,10 @@ interface AppNavigatorProps {
 }
 
 const AppNavigator: React.FC<AppNavigatorProps> = ({ userRole, currentUser, onLogout }) => {
+  const insets = useSafeAreaInsets();
+  const bottomInset = Platform.OS === 'android' ? Math.max(insets.bottom, 16) : insets.bottom;
+  const tabBarBaseHeight = 60;
+
   // Определяем доступные вкладки в зависимости от роли
   const getTabsForRole = () => {
     const commonTabs = [
@@ -108,9 +115,9 @@ const AppNavigator: React.FC<AppNavigatorProps> = ({ userRole, currentUser, onLo
             backgroundColor: Colors.cardBackground,
             borderTopColor: Colors.border,
             borderTopWidth: 1,
-            paddingBottom: 8,
+            paddingBottom: 8 + bottomInset,
             paddingTop: 8,
-            height: 60,
+            height: tabBarBaseHeight + bottomInset,
           },
           tabBarLabelStyle: {
             fontSize: 12,
@@ -129,7 +136,19 @@ const AppNavigator: React.FC<AppNavigatorProps> = ({ userRole, currentUser, onLo
               tabBarLabel: tab.label,
             }}
           >
-            {(props) => <tab.component {...props} route={{ ...props.route, params: { ...props.route.params, userRole } }} />}
+            {(props) => (
+              <tab.component
+                {...props}
+                route={{
+                  ...props.route,
+                  params: {
+                    ...props.route.params,
+                    userRole,
+                    currentUser,
+                  },
+                }}
+              />
+            )}
           </Tab.Screen>
         ))}
         <Tab.Screen
@@ -172,6 +191,27 @@ const AppNavigator: React.FC<AppNavigatorProps> = ({ userRole, currentUser, onLo
           }}
         >
           {(props) => <DefectDetailScreen {...props} />}
+        </Stack.Screen>
+        <Stack.Screen
+          name="Notifications"
+          options={{
+            presentation: 'card',
+            headerShown: false,
+          }}
+        >
+          {(props) => (
+            <NotificationsScreen
+              {...props}
+              route={{
+                ...props.route,
+                params: {
+                  ...props.route.params,
+                  userRole,
+                  currentUser,
+                },
+              }}
+            />
+          )}
         </Stack.Screen>
         <Stack.Screen 
           name="ProjectApartments" 

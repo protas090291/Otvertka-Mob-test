@@ -2,7 +2,6 @@
   "expo": {
     "name": "Отвёртка",
     "slug": "otvertka-mobile",
-    "owner": "zakharprotas",
     "version": "2.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -43,16 +42,21 @@
             ]
           }
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
-    "extra": {
-      "eas": {
-        "projectId": "bce5f246-91b5-491f-bcf1-28df1ccf3c21"
-      }
-    },
     "runtimeVersion": "2.0.0",
     "updates": {
-      "url": "https://u.expo.dev/bce5f246-91b5-491f-bcf1-28df1ccf3c21"
-    }
+      "url": "https://u.expo.dev/6846e17a-aef6-423e-92d0-44bd7aa58ef0",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6846e17a-aef6-423e-92d0-44bd7aa58ef0"
+      }
+    },
+    "owner": "zakhar2004"
   }
 }

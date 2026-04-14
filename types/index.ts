@@ -50,6 +50,10 @@ export interface Defect {
   status: 'open' | 'in-progress' | 'resolved' | 'closed';
   reportedBy: string;
   reportedDate: string;
+  createdById?: string;
+  createdByName?: string;
+  assignedToId?: string;
+  assignedToName?: string;
   assignedTo?: string;
   dueDate?: string;
   photoUrl?: string;

@@ -131,11 +131,12 @@ const DefectsOverlay: React.FC<DefectsOverlayProps> = ({
         height={imageLayout.height}
         style={styles.svg}
         viewBox={`0 0 ${imageLayout.width} ${imageLayout.height}`}
+        pointerEvents="none"
       >
-        <G>
+        <G pointerEvents="none">
           {defects.map((defect) => {
-            const xPercent = defect.x_coord || 50;
-            const yPercent = defect.y_coord || 50;
+            const xPercent = defect.x_coord ?? 50;
+            const yPercent = defect.y_coord ?? 50;
             const color = getDefectColor(defect.status);
             
             // Преобразуем проценты в координаты SVG с учетом смещения изображения
@@ -172,8 +173,8 @@ const DefectsOverlay: React.FC<DefectsOverlayProps> = ({
         pointerEvents="box-none"
       >
         {defects.map((defect) => {
-          const xPercent = defect.x_coord || 50;
-          const yPercent = defect.y_coord || 50;
+          const xPercent = defect.x_coord ?? 50;
+          const yPercent = defect.y_coord ?? 50;
           const color = getDefectColor(defect.status);
           const iconName = getDefectIcon(defect.status) as any;
 

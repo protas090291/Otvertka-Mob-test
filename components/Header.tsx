@@ -1,20 +1,25 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { Theme } from '../constants/Theme';
 import { UserRole } from '../types';
+import { getUnreadNotificationsCount } from '../lib/notificationsApi';
 
 interface HeaderProps {
   title?: string;
   userRole: UserRole;
+  currentUserId?: string;
   onMenuPress?: () => void;
   onSearchPress?: () => void;
   onNotificationPress?: () => void;
 }
 
 const roleLabels: Record<UserRole, string> = {
+  admin: 'Администратор',
+  management: 'Управление',
+  user: 'Пользователь',
   client: 'Заказчик',
   foreman: 'Прораб',
   contractor: 'Подрядчик',
@@ -26,10 +31,39 @@ const roleLabels: Record<UserRole, string> = {
 const Header: React.FC<HeaderProps> = ({
   title = 'Отвёртка',
   userRole,
+  currentUserId,
   onMenuPress,
   onSearchPress,
   onNotificationPress,
 }) => {
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    let timer: any;
+
+    const refresh = async () => {
+      if (!currentUserId) {
+        if (mounted) setUnreadCount(0);
+        return;
+      }
+      try {
+        const count = await getUnreadNotificationsCount(currentUserId);
+        if (mounted) setUnreadCount(count);
+      } catch {
+        if (mounted) setUnreadCount(0);
+      }
+    };
+
+    refresh();
+    timer = setInterval(refresh, 15000);
+
+    return () => {
+      mounted = false;
+      if (timer) clearInterval(timer);
+    };
+  }, [currentUserId]);
+
   return (
     <BlurView intensity={20} tint="dark" style={styles.container}>
       <LinearGradient
@@ -40,9 +74,11 @@ const Header: React.FC<HeaderProps> = ({
       >
         <View style={styles.content}>
           <View style={styles.leftSection}>
-            <TouchableOpacity onPress={onMenuPress} style={styles.iconButton}>
-              <Ionicons name="menu" size={24} color={Theme.colors.text} />
-            </TouchableOpacity>
+            {onMenuPress ? (
+              <TouchableOpacity onPress={onMenuPress} style={styles.iconButton}>
+                <Ionicons name="menu" size={24} color={Theme.colors.text} />
+              </TouchableOpacity>
+            ) : null}
             <View style={styles.logoContainer}>
               <LinearGradient
                 colors={[Theme.colors.primary, Theme.colors.secondary]}
@@ -58,12 +94,18 @@ const Header: React.FC<HeaderProps> = ({
           </View>
 
           <View style={styles.rightSection}>
-            <TouchableOpacity onPress={onSearchPress} style={styles.iconButton}>
-              <Ionicons name="search-outline" size={24} color={Theme.colors.text} />
-            </TouchableOpacity>
+            {onSearchPress ? (
+              <TouchableOpacity onPress={onSearchPress} style={styles.iconButton}>
+                <Ionicons name="search-outline" size={24} color={Theme.colors.text} />
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity onPress={onNotificationPress} style={styles.iconButton}>
               <Ionicons name="notifications-outline" size={24} color={Theme.colors.text} />
-              <View style={styles.badge} />
+              {unreadCount > 0 ? (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : String(unreadCount)}</Text>
+                </View>
+              ) : null}
             </TouchableOpacity>
           </View>
         </View>
@@ -136,12 +178,21 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 4,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
     backgroundColor: Theme.colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+    lineHeight: 12,
   },
 });
 

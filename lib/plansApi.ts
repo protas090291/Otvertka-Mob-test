@@ -6,8 +6,11 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 минут
 
 export interface ApartmentPlan {
   apartmentNumber: string;
-  planUrl: string;
+  previewUrl?: string;
+  documentUrl?: string;
   fileName: string;
+  previewFileName?: string;
+  documentFileName?: string;
   planSourceApartment: string;
   isTypical: boolean;
   typicalGroup?: string;
@@ -235,28 +238,40 @@ export const loadApartmentPlan = async (apartmentNumber: string): Promise<Apartm
         console.log('📋 Найденные файлы:', planFiles.map(f => f.name));
       }
       
-      // Берем первый найденный файл (PDF или любой другой формат)
-      const pdfFile = planFiles.find(file => 
-        file.name.toLowerCase().endsWith('.pdf') || 
-        !file.name.match(/\.(pdf|jpg|jpeg|png|gif)$/i)
-      ) || planFiles[0];
-      
+      const imageFile =
+        planFiles.find(file => file.name.toLowerCase().endsWith('.png')) ||
+        planFiles.find(file => file.name.toLowerCase().endsWith('.jpg')) ||
+        planFiles.find(file => file.name.toLowerCase().endsWith('.jpeg'));
+
+      const pdfFile = planFiles.find(file => file.name.toLowerCase().endsWith('.pdf'));
+
+      const previewUrl = imageFile
+        ? supabase.storage.from('architectural-plans').getPublicUrl(imageFile.name).data.publicUrl
+        : undefined;
+      const documentUrl = pdfFile
+        ? supabase.storage.from('architectural-plans').getPublicUrl(pdfFile.name).data.publicUrl
+        : undefined;
+
+      if (imageFile) {
+        console.log(`✅ Найдено превью плана: ${imageFile.name}`);
+        console.log(`✅ URL превью: ${previewUrl}`);
+      }
       if (pdfFile) {
-        // Используем обычный клиент для получения публичного URL (как в веб-версии)
-        const { data: urlData } = supabase.storage
-          .from('architectural-plans')
-          .getPublicUrl(pdfFile.name);
-        
-        console.log(`✅ Найден план: ${pdfFile.name}`);
-        console.log(`✅ Публичный URL: ${urlData.publicUrl}`);
-        
+        console.log(`✅ Найден PDF плана: ${pdfFile.name}`);
+        console.log(`✅ URL PDF: ${documentUrl}`);
+      }
+
+      if (previewUrl || documentUrl) {
         return {
           apartmentNumber,
-          planUrl: urlData.publicUrl,
-          fileName: pdfFile.name,
+          previewUrl,
+          documentUrl,
+          fileName: imageFile?.name || pdfFile?.name || planFiles[0].name,
+          previewFileName: imageFile?.name,
+          documentFileName: pdfFile?.name,
           planSourceApartment: planApartment,
           isTypical: isTypical || false,
-          typicalGroup: typicalGroup
+          typicalGroup: typicalGroup,
         };
       }
 

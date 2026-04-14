@@ -21,6 +21,8 @@ interface DashboardScreenProps {
 
 const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, route }) => {
   const userRole: UserRole = route.params?.userRole || 'technadzor';
+  const currentUser = route.params?.currentUser;
+  const currentUserId = currentUser?.id;
   const [refreshing, setRefreshing] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectStats, setProjectStats] = useState<any>(null);
@@ -29,7 +31,24 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, route }) 
   const [activeDefectsCount, setActiveDefectsCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
-  const quickActions = {
+  const quickActions: Partial<Record<UserRole, Array<{ label: string; icon: string; view: string }>>> = {
+    admin: [
+      { label: 'Проекты', icon: 'business-outline', view: 'Projects' },
+      { label: 'Дефекты', icon: 'warning-outline', view: 'Defects' },
+      { label: 'Материалы', icon: 'cube-outline', view: 'Materials' },
+      { label: 'Профиль', icon: 'person-outline', view: 'Profile' },
+    ],
+    management: [
+      { label: 'Проекты', icon: 'business-outline', view: 'Projects' },
+      { label: 'Дефекты', icon: 'warning-outline', view: 'Defects' },
+      { label: 'Материалы', icon: 'cube-outline', view: 'Materials' },
+      { label: 'Профиль', icon: 'person-outline', view: 'Profile' },
+    ],
+    user: [
+      { label: 'Проекты', icon: 'business-outline', view: 'Projects' },
+      { label: 'Дефекты', icon: 'warning-outline', view: 'Defects' },
+      { label: 'Профиль', icon: 'person-outline', view: 'Profile' },
+    ],
     client: [
       { label: 'Создать задачу', icon: 'calendar-outline', view: 'Schedule' },
       { label: 'Добавить дефект', icon: 'warning-outline', view: 'Defects' },
@@ -166,7 +185,37 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, route }) 
     const completedTasks = tasks.filter(t => t.status === 'completed');
     const lowStockMaterials = materials.filter(m => m.status === 'low-stock' || m.status === 'out-of-stock');
     
-    const stats = {
+    const commonOpsStats: Array<{ title: string; value: string; icon: any; color: any }> = [
+      {
+        title: 'Активные проекты',
+        value: String(projectStats?.activeProjects || projects.length || 0),
+        icon: 'business-outline' as const,
+        color: 'blue' as const,
+      },
+      {
+        title: 'Активные дефекты',
+        value: String(activeDefectsCount),
+        icon: 'warning-outline' as const,
+        color: 'red' as const,
+      },
+      {
+        title: 'Активные задачи',
+        value: String(activeTasks.length),
+        icon: 'checkmark-circle-outline' as const,
+        color: 'green' as const,
+      },
+      {
+        title: 'Просрочки',
+        value: String(overdueTasks.length),
+        icon: 'alert-circle-outline' as const,
+        color: 'orange' as const,
+      },
+    ];
+
+    const stats: Partial<Record<UserRole, Array<{ title: string; value: string; icon: any; color: any }>>> = {
+      admin: commonOpsStats,
+      management: commonOpsStats,
+      user: commonOpsStats,
       client: [
         { 
           title: 'Активные проекты', 
@@ -325,10 +374,10 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, route }) 
       ],
     };
     
-    return stats[userRole] || stats.technadzor;
+    return (stats[userRole] || stats.technadzor || []) as Array<{ title: string; value: string; icon: any; color: any }>;
   };
 
-  const stats = getStatsForRole();
+  const stats: Array<{ title: string; value: string; icon: any; color: any }> = getStatsForRole();
 
   return (
     <View style={styles.container}>
@@ -339,7 +388,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, route }) 
         style={StyleSheet.absoluteFill}
       />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <Header userRole={userRole} />
+        <Header userRole={userRole} currentUserId={currentUserId} onNotificationPress={() => navigation.navigate('Notifications')} />
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.content}
@@ -354,7 +403,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation, route }) 
 
           {/* Stats Grid */}
           <View style={styles.statsGrid}>
-            {stats.map((stat, index) => (
+            {stats.map((stat: any, index: number) => (
               <StatCard
                 key={index}
                 title={stat.title}

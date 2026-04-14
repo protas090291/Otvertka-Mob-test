@@ -71,6 +71,19 @@ build/
 *.aab
 *.ipa
 
+%ANDROID_SDK_ROOT%/
+%APK%
+%APK%/
+ %APK%
+ %APK%/
+android/*.txt
+android/s9_*
+
+# Local artifacts
+.npmrc
+android/
+android_plan_logcat.txt
+
 # Test coverage
 coverage/
 

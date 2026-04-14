@@ -21,6 +21,40 @@ export interface LoginCredentials {
   password: string;
 }
 
+export type UserProfileLite = {
+  id: string;
+  full_name: string | null;
+  email: string;
+  is_active: boolean;
+  displayName: string;
+};
+
+export const getActiveUserProfiles = async (): Promise<UserProfileLite[]> => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('user_profiles')
+      .select('id, full_name, email, is_active')
+      .eq('is_active', true)
+      .order('full_name', { ascending: true });
+
+    if (error) {
+      console.error('Ошибка получения списка пользователей:', error);
+      return [];
+    }
+
+    const items = (data || []) as Array<{ id: string; full_name: string | null; email: string; is_active: boolean }>;
+    return items
+      .map((u) => ({
+        ...u,
+        displayName: (u.full_name && u.full_name.trim() !== '' ? u.full_name : (u.email || '').split('@')[0]) || 'Пользователь',
+      }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName, 'ru'));
+  } catch (error) {
+    console.error('Ошибка в getActiveUserProfiles:', error);
+    return [];
+  }
+};
+
 /**
  * Получить профиль пользователя по ID
  */
@@ -138,14 +172,18 @@ export const signOut = async (): Promise<{ error: string | null }> => {
  */
 export const getCurrentUser = async (): Promise<{ user: UserProfile | null; error: string | null }> => {
   try {
-    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+    // В React Native с persistSession сначала пытаемся взять сессию локально,
+    // чтобы не падать на "Auth session missing" после сворачивания/перезапуска.
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 
-    if (authError) {
-      if (authError.message.includes('Failed to fetch') || authError.message.includes('Network')) {
+    if (sessionError) {
+      if (sessionError.message.includes('Failed to fetch') || sessionError.message.includes('Network')) {
         return { user: null, error: 'Ошибка подключения к серверу. Проверьте интернет-соединение.' };
       }
-      return { user: null, error: authError.message || 'Пользователь не авторизован' };
+      return { user: null, error: sessionError.message || 'Пользователь не авторизован' };
     }
+
+    const authUser = sessionData.session?.user || null;
 
     if (!authUser) {
       return { user: null, error: 'Пользователь не авторизован' };

@@ -25,6 +25,8 @@ interface ProjectWithMetrics extends Project {
 
 const ProjectsScreen: React.FC<ProjectsScreenProps> = ({ navigation, route }) => {
   const userRole: UserRole = route.params?.userRole || 'technadzor';
+  const currentUser = route.params?.currentUser;
+  const currentUserId = currentUser?.id;
   const [projects, setProjects] = useState<ProjectWithMetrics[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -175,7 +177,7 @@ const ProjectsScreen: React.FC<ProjectsScreenProps> = ({ navigation, route }) =>
         style={StyleSheet.absoluteFill}
       />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <Header userRole={userRole} title="Проекты" />
+        <Header userRole={userRole} title="Проекты" currentUserId={currentUserId} onNotificationPress={() => navigation.navigate('Notifications')} />
         <ScrollView 
           style={styles.scrollView} 
           contentContainerStyle={styles.content}

@@ -31,12 +31,11 @@ const fetchWithTimeout = async (
 };
 
 // Создаем клиент Supabase для React Native
-// Временно отключаем persistSession из-за проблем с AsyncStorage
-// Сессия будет работать в рамках одной сессии приложения
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
-    persistSession: false, // Временно отключено из-за проблем с AsyncStorage
+    persistSession: true,
+    storage,
     detectSessionInUrl: false, // В React Native нет URL
   },
   global: {
@@ -48,7 +47,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
     autoRefreshToken: true,
-    persistSession: false, // Временно отключено
+    persistSession: false,
     detectSessionInUrl: false,
   },
   global: {

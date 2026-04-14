@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Dimensions, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -153,7 +153,10 @@ const ApartmentPlanScreen: React.FC<ApartmentPlanScreenProps> = ({ navigation, r
       const apartmentPlan = await loadApartmentPlan(apartmentNumber);
       if (apartmentPlan) {
         setPlan(apartmentPlan);
-        setIsSelectingLocation(true);
+        setIsSelectingLocation(!!apartmentPlan.previewUrl);
+        if (!apartmentPlan.previewUrl && apartmentPlan.documentUrl) {
+          Alert.alert('План доступен только в PDF', 'Для отметки дефектов требуется превью (PNG/JPG). Сейчас можно открыть PDF.');
+        }
         // Загружаем дефекты для этой квартиры
         await loadDefectsForApartment(apartmentNumber);
         // Сбрасываем трансформации
@@ -212,6 +215,9 @@ const ApartmentPlanScreen: React.FC<ApartmentPlanScreenProps> = ({ navigation, r
 
   // Обработчик клика на изображение
   const handleImagePress = (event: any) => {
+    if (plan && !plan.previewUrl) {
+      return;
+    }
     if (!isSelectingLocation || !imageLayout || !imageSize) {
       console.warn('⚠️ Не могу обработать клик:', { 
         isSelectingLocation, 
@@ -382,12 +388,10 @@ const ApartmentPlanScreen: React.FC<ApartmentPlanScreenProps> = ({ navigation, r
           y_coord: result.y_coord
         });
         
-        // Если есть фото, загружаем его ПОСЛЕ создания дефекта (как в веб-версии)
-        const photoUriFromForm = (defectData as any).photoUri;
-        console.log('📸 Проверка photoUri из формы:', {
-          hasPhotoUri: !!photoUriFromForm,
-          photoUri: photoUriFromForm,
-          defectId: result.id
+        const photoUrisFromForm: string[] = (defectData as any).photoUris || ((defectData as any).photoUri ? [(defectData as any).photoUri] : []);
+        console.log('📸 Проверка photoUris из формы:', {
+          count: photoUrisFromForm.length,
+          defectId: result.id,
         });
         
         // #region agent log
@@ -396,8 +400,8 @@ const ApartmentPlanScreen: React.FC<ApartmentPlanScreenProps> = ({ navigation, r
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
             hypothesisId: 'A',
-            message: 'ApartmentPlanScreen: checking photoUri after defect creation',
-            data: {defectId: result.id, hasPhotoUri: !!photoUriFromForm, photoUri: photoUriFromForm},
+            message: 'ApartmentPlanScreen: checking photoUris after defect creation',
+            data: {defectId: result.id, photoCount: photoUrisFromForm.length},
             timestamp: Date.now(),
             sessionId: 'debug-session',
             location: 'ApartmentPlanScreen.tsx:245'
@@ -405,10 +409,10 @@ const ApartmentPlanScreen: React.FC<ApartmentPlanScreenProps> = ({ navigation, r
         }).catch(() => {});
         // #endregion
         
-        if (photoUriFromForm && result.id) {
+        if (photoUrisFromForm.length > 0 && result.id) {
           console.log('📸 Загрузка фото ПОСЛЕ создания дефекта...');
           console.log('📸 Defect ID:', result.id);
-          console.log('📸 Photo URI:', photoUriFromForm);
+          console.log('📸 Photo count:', photoUrisFromForm.length);
           
           try {
             // #region agent log
@@ -426,7 +430,12 @@ const ApartmentPlanScreen: React.FC<ApartmentPlanScreenProps> = ({ navigation, r
             }).catch(() => {});
             // #endregion
             
-            const photoUrl = await uploadDefectPhoto((defectData as any).photoUri, result.id);
+            const uploadedUrls: string[] = [];
+            for (const uri of photoUrisFromForm) {
+              const url = await uploadDefectPhoto(uri, result.id, { folderPrefix: result.id });
+              if (url) uploadedUrls.push(url);
+            }
+            const photoUrl = uploadedUrls[0] || null;
             
             // #region agent log
             fetch('http://127.0.0.1:7242/ingest/6775aa3c-6f0f-4e50-8345-e04987cc8c03', {
@@ -519,9 +528,10 @@ const ApartmentPlanScreen: React.FC<ApartmentPlanScreenProps> = ({ navigation, r
       } else {
         Alert.alert('Ошибка', 'Не удалось создать дефект');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Ошибка создания дефекта:', error);
-      Alert.alert('Ошибка', 'Не удалось создать дефект');
+      const message = error?.message ? String(error.message) : 'Не удалось создать дефект';
+      Alert.alert('Ошибка', message);
     }
   };
 
@@ -625,6 +635,19 @@ const ApartmentPlanScreen: React.FC<ApartmentPlanScreenProps> = ({ navigation, r
                       </Text>
                     </View>
                   )}
+
+                  {!plan.previewUrl && plan.documentUrl && (
+                    <View style={styles.instructionBanner}>
+                      <Ionicons name="document" size={20} color={Theme.colors.primary} />
+                      <Text style={styles.instructionText}>План доступен только в PDF. Отметка дефектов отключена.</Text>
+                      <TouchableOpacity
+                        onPress={() => Linking.openURL(plan.documentUrl!)}
+                        style={[styles.zoomButton, { marginLeft: 12 }]}
+                      >
+                        <Ionicons name="open-outline" size={20} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
                   
                   <View style={styles.planWrapper}>
                     <PanGestureHandler
@@ -649,7 +672,7 @@ const ApartmentPlanScreen: React.FC<ApartmentPlanScreenProps> = ({ navigation, r
                               style={styles.imageTouchable}
                             >
                               <AnimatedImage
-                                source={{ uri: getImageUrl(plan.planUrl) }}
+                                source={{ uri: getImageUrl(plan.previewUrl || '') }}
                                 style={styles.planImage}
                                 contentFit="contain"
                                 onLoad={handleImageLoad}
@@ -744,52 +767,27 @@ const ApartmentPlanScreen: React.FC<ApartmentPlanScreenProps> = ({ navigation, r
           )}
           
           {/* Форма создания дефекта */}
-          {showDefectForm && defectCoordinates && (
-            <Modal
+          {defectCoordinates && (
+            <DefectForm
               visible={showDefectForm}
-              animationType="slide"
-              transparent={true}
-              onRequestClose={() => setShowDefectForm(false)}
-            >
-              <View style={styles.modalContainer}>
-                <Card variant="gradient" style={styles.modalCard}>
-                  <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>Создание дефекта</Text>
-                    <TouchableOpacity onPress={() => setShowDefectForm(false)}>
-                      <Ionicons name="close" size={24} color={Theme.colors.text} />
-                    </TouchableOpacity>
-                  </View>
-                  
-                  <View style={styles.coordinatesInfo}>
-                    <Ionicons name="location" size={16} color={Theme.colors.primary} />
-                    <Text style={styles.coordinatesText}>
-                      Квартира {selectedApartment} • Координаты: {defectCoordinates?.x.toFixed(1) || 'N/A'}%, {defectCoordinates?.y.toFixed(1) || 'N/A'}%
-                    </Text>
-                  </View>
-                  
-                  <ScrollView style={styles.formScrollView}>
-                    <DefectForm
-                      visible={true}
-                      initialData={{
-                        location: selectedApartment,
-                        projectId: '',
-                        x_coord: defectCoordinates.x,
-                        y_coord: defectCoordinates.y,
-                      }}
-                      onSubmit={handleCreateDefect}
-                      onCancel={() => {
-                        setShowDefectForm(false);
-                        setIsSelectingLocation(true);
-                      }}
-                      onClose={() => {
-                        setShowDefectForm(false);
-                        setIsSelectingLocation(true);
-                      }}
-                    />
-                  </ScrollView>
-                </Card>
-              </View>
-            </Modal>
+              initialData={{
+                location: selectedApartment,
+                projectId: '',
+                x_coord: defectCoordinates.x,
+                y_coord: defectCoordinates.y,
+              }}
+              onSubmit={handleCreateDefect}
+              onCancel={() => {
+                setShowDefectForm(false);
+                setDefectCoordinates(null);
+                setIsSelectingLocation(true);
+              }}
+              onClose={() => {
+                setShowDefectForm(false);
+                setDefectCoordinates(null);
+                setIsSelectingLocation(true);
+              }}
+            />
           )}
         </SafeAreaView>
       </View>

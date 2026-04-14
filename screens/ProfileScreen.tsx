@@ -16,6 +16,7 @@ interface ProfileScreenProps {
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation, route }) => {
   const currentUser: UserProfile | undefined = route.params?.currentUser;
+  const currentUserId = currentUser?.id;
   const userRole: UserRole = currentUser?.role || route.params?.userRole || 'technadzor';
   const onLogout = route.params?.onLogout;
 
@@ -45,7 +46,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation, route }) => {
         style={StyleSheet.absoluteFill}
       />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <Header userRole={userRole} title="Профиль" />
+        <Header userRole={userRole} title="Профиль" currentUserId={currentUserId} onNotificationPress={() => navigation.navigate('Notifications')} />
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
           <Card variant="gradient" style={styles.profileCard}>
             <View style={styles.avatarContainer}>

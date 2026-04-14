@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
@@ -9,7 +9,7 @@ import Card from '../components/Card';
 import { Theme } from '../constants/Theme';
 import { UserRole, Defect } from '../types';
 import { loadApartmentPlan, ApartmentPlan } from '../lib/plansApi';
-import { getDefectById, verifyAndFixDefectPhotoUrl, updateDefect } from '../lib/defectsApi';
+import { getDefectById, listDefectPhotoUrls, updateDefect, updateDefectAsAdmin, verifyAndFixDefectPhotoUrl } from '../lib/defectsApi';
 import DefectsOverlay from '../components/DefectsOverlay';
 import { GestureHandlerRootView, PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming, runOnJS } from 'react-native-reanimated';
@@ -24,13 +24,20 @@ const AnimatedImage = Animated.createAnimatedComponent(Image);
 const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, route }) => {
   const defectParam: Defect = route.params?.defect;
   const userRole: UserRole = route.params?.userRole || 'technadzor';
+  const currentUser = route.params?.currentUser;
+  const currentUserId = currentUser?.id;
   
   const [defect, setDefect] = useState<Defect>(defectParam);
+  const [loading, setLoading] = useState(false);
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [plan, setPlan] = useState<ApartmentPlan | null>(null);
   const [loadingPlan, setLoadingPlan] = useState(false);
+  const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
   const [imageLayout, setImageLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [photoError, setPhotoError] = useState(false);
   const [isFixingPhotoUrl, setIsFixingPhotoUrl] = useState(false);
+
+  const isAssignee = !!currentUserId && !!defect?.assignedToId && String(defect.assignedToId) === String(currentUserId);
   
   // Анимационные значения для зума и пана плана
   const scale = useSharedValue(2.0);
@@ -71,6 +78,16 @@ const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, rou
             
             console.log('✅ Дефект перезагружен:', freshDefect);
             console.log('📸 photoUrl в перезагруженном дефекте:', freshDefect.photoUrl);
+
+            try {
+              const urlsFromFolder = await listDefectPhotoUrls(freshDefect.id);
+              const merged = [freshDefect.photoUrl, ...urlsFromFolder]
+                .filter((u): u is string => !!u && u.trim() !== '')
+                .filter((u, idx, arr) => arr.indexOf(u) === idx);
+              setPhotoUrls(merged);
+            } catch {
+              setPhotoUrls(freshDefect.photoUrl ? [freshDefect.photoUrl] : []);
+            }
             
             // Проверяем и исправляем URL фото для существующих дефектов
             if (freshDefect.photoUrl) {
@@ -81,7 +98,7 @@ const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, rou
                 if (fixedUrl && fixedUrl !== freshDefect.photoUrl) {
                   console.log('🔧 URL фото исправлен:', { old: freshDefect.photoUrl, new: fixedUrl });
                   // Обновляем дефект с исправленным URL в базе данных
-                  const updatedDefect = await updateDefect(freshDefect.id, { photo_url: fixedUrl });
+                  const updatedDefect = await updateDefectAsAdmin(freshDefect.id, { photo_url: fixedUrl });
                   if (updatedDefect) {
                     setDefect(updatedDefect);
                     setPhotoError(false);
@@ -187,6 +204,22 @@ const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, rou
     setImageLayout({ x, y, width, height });
   };
 
+  const handleImageLoad = (event: any) => {
+    let width: number | undefined;
+    let height: number | undefined;
+
+    if (event?.source) {
+      width = event.source.width || event.source.naturalWidth;
+      height = event.source.height || event.source.naturalHeight;
+    }
+
+    if (!width || !height) {
+      return;
+    }
+
+    setImageSize({ width, height });
+  };
+
   const animatedImageStyle = useAnimatedStyle(() => {
     return {
       transform: [
@@ -271,7 +304,7 @@ const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, rou
         <Header
           title="Дефект"
           userRole={userRole}
-          onBack={() => navigation.goBack()}
+          onMenuPress={() => navigation.goBack()}
         />
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Дефект не найден</Text>
@@ -290,7 +323,9 @@ const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, rou
       <Header
         title="Детали дефекта"
         userRole={userRole}
-        onBack={() => navigation.goBack()}
+        currentUserId={currentUserId}
+        onNotificationPress={() => navigation.navigate('Notifications')}
+        onMenuPress={() => navigation.goBack()}
       />
       
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -330,13 +365,11 @@ const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, rou
                 <Text style={styles.detailValue}>{defect.location}</Text>
               </View>
             )}
-            
-
-            {defect.reportedBy && (
+                        {defect.createdByName && (
               <View style={styles.detailRow}>
                 <Ionicons name="person-outline" size={20} color={Theme.colors.primary} />
-                <Text style={styles.detailLabel}>Сообщил:</Text>
-                <Text style={styles.detailValue}>{defect.reportedBy}</Text>
+                <Text style={styles.detailLabel}>Создал:</Text>
+                <Text style={styles.detailValue}>{defect.createdByName}</Text>
               </View>
             )}
 
@@ -360,7 +393,7 @@ const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, rou
               <View style={styles.detailRow}>
                 <Ionicons name="person-circle-outline" size={20} color={Theme.colors.primary} />
                 <Text style={styles.detailLabel}>Назначен:</Text>
-                <Text style={styles.detailValue}>{defect.assignedTo}</Text>
+                <Text style={styles.detailValue}>{defect.assignedToName || defect.assignedTo}</Text>
               </View>
             )}
 
@@ -374,6 +407,48 @@ const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, rou
               </View>
             )}
           </View>
+
+          {isAssignee ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Изменить статус</Text>
+              <View style={styles.statusButtons}>
+                {[
+                  { label: 'Открыт', value: 'open' },
+                  { label: 'В работе', value: 'in-progress' },
+                  { label: 'Исправлен', value: 'resolved' },
+                  { label: 'Закрыт', value: 'closed' },
+                ].map((opt) => {
+                  const selected = String(defect.status) === String(opt.value);
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      style={[styles.statusButton, selected ? styles.statusButtonSelected : undefined]}
+                      onPress={async () => {
+                        try {
+                          setLoading(true);
+                          const updated = await updateDefect(defect.id, { status: opt.value as any });
+                          if (updated) {
+                            setDefect(updated);
+                          }
+                        } catch {
+                          Alert.alert('Ошибка', 'Не удалось обновить статус');
+                        } finally {
+                          setLoading(false);
+                        }
+                      }}
+                      disabled={loading}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.statusButtonText, selected ? styles.statusButtonTextSelected : undefined]}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={styles.statusHint}>Вы можете менять только статус этого дефекта.</Text>
+            </View>
+          ) : null}
         </Card>
 
         {/* Фото дефекта */}
@@ -385,9 +460,7 @@ const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, rou
           });
           return null;
         })()}
-        {defect.photoUrl && defect.photoUrl.trim() !== '' && 
-         (defect.photoUrl.startsWith('http://') || defect.photoUrl.startsWith('https://')) &&
-         !photoError && (
+        {photoUrls.length > 0 && !photoError && (
           <Card variant="gradient" style={styles.photoCard}>
             <Text style={styles.sectionTitle}>Фото дефекта</Text>
             {isFixingPhotoUrl && (
@@ -399,17 +472,20 @@ const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, rou
               </View>
             )}
             <View style={styles.photoContainer}>
-              <Image
-                key={defect.photoUrl} // Добавляем key для принудительной перезагрузки при изменении URL
-                source={{ uri: defect.photoUrl }}
-                style={styles.defectPhoto}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-                transition={200}
-                onError={(error: any) => {
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {photoUrls.map((url) => (
+                  <View key={url} style={{ marginRight: 10 }}>
+                    <Image
+                      key={url}
+                      source={{ uri: url }}
+                      style={styles.defectPhoto}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                      transition={200}
+                      onError={(error: any) => {
                   console.error('❌ Ошибка загрузки фото в детальном экране:', {
                     error: error?.error || error,
-                    url: defect.photoUrl,
+                    url,
                     defectId: defect.id
                   });
                   // Помечаем фото как недоступное и пытаемся исправить URL
@@ -423,7 +499,7 @@ const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, rou
                         if (fixedUrl && fixedUrl !== defect.photoUrl) {
                           console.log('🔧 URL фото исправлен после ошибки загрузки:', { old: defect.photoUrl, new: fixedUrl });
                           // Обновляем дефект с исправленным URL
-                          updateDefect(defect.id, { photo_url: fixedUrl })
+                          updateDefectAsAdmin(defect.id, { photo_url: fixedUrl })
                             .then((updatedDefect) => {
                               if (updatedDefect) {
                                 // Обновляем дефект с исправленным URL
@@ -450,11 +526,14 @@ const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, rou
                       });
                   }
                 }}
-                onLoad={() => {
-                  console.log('✅ Фото загружено в детальном экране:', defect.photoUrl);
-                  setPhotoError(false);
-                }}
-              />
+                      onLoad={() => {
+                        console.log('✅ Фото загружено в детальном экране:', url);
+                        setPhotoError(false);
+                      }}
+                    />
+                  </View>
+                ))}
+              </ScrollView>
             </View>
           </Card>
         )}
@@ -485,45 +564,61 @@ const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, rou
             
             {plan ? (
               <View style={styles.planContainer}>
-                <GestureHandlerRootView style={{ flex: 1 }}>
-                  <PanGestureHandler
-                    ref={panRef}
-                    onGestureEvent={onPanGestureEvent}
-                    onHandlerStateChange={onPanHandlerStateChange}
-                    minPointers={1}
-                    maxPointers={1}
-                    avgTouches
-                  >
-                    <Animated.View style={{ flex: 1 }}>
-                      <PinchGestureHandler
-                        ref={pinchRef}
-                        onGestureEvent={onPinchGestureEvent}
-                        onHandlerStateChange={onPinchHandlerStateChange}
-                      >
-                        <Animated.View style={[styles.imageContainer, animatedImageStyle]}>
-                          <AnimatedImage
-                            source={{ uri: getImageUrl(plan.planUrl) }}
-                            style={styles.planImage}
-                            contentFit="contain"
-                            onLayout={handleImageLayout}
-                            cachePolicy="memory-disk"
-                          />
-                          
-                          {/* Overlay с отметкой дефекта */}
-                          {imageLayout && (
-                            <DefectsOverlay
-                              defects={[defect]}
-                              imageLayout={imageLayout}
-                              animatedStyle={{}}
-                              onDefectPress={() => {}}
-                              userRole={userRole}
-                            />
-                          )}
-                        </Animated.View>
-                      </PinchGestureHandler>
-                    </Animated.View>
-                  </PanGestureHandler>
-                </GestureHandlerRootView>
+                {!plan.previewUrl && plan.documentUrl && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                    <Ionicons name="document-outline" size={18} color={Theme.colors.textSecondary} />
+                    <Text style={{ marginLeft: 8, color: Theme.colors.textSecondary, flex: 1 }}>
+                      План доступен только в PDF. Отображение на плане отключено.
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => Linking.openURL(plan.documentUrl!)}
+                      style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+                    >
+                      <Ionicons name="open-outline" size={18} color={Theme.colors.primary} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {!!plan.previewUrl && (
+                  <GestureHandlerRootView style={{ flex: 1 }}>
+                    <PanGestureHandler
+                      ref={panRef}
+                      onGestureEvent={onPanGestureEvent}
+                      onHandlerStateChange={onPanHandlerStateChange}
+                    >
+                      <Animated.View style={{ flex: 1 }}>
+                        <PinchGestureHandler
+                          ref={pinchRef}
+                          onGestureEvent={onPinchGestureEvent}
+                          onHandlerStateChange={onPinchHandlerStateChange}
+                        >
+                          <Animated.View style={[styles.imageContainer, animatedImageStyle]}>
+                            <View style={styles.imageTouchable} onLayout={handleImageLayout}>
+                              <AnimatedImage
+                                source={{ uri: getImageUrl(plan.previewUrl) }}
+                                style={styles.planImage}
+                                contentFit="contain"
+                                onLoad={handleImageLoad}
+                                cachePolicy="memory-disk"
+                              />
+                            </View>
+
+                            {imageLayout && imageSize && (
+                              <DefectsOverlay
+                                defects={[defect]}
+                                imageLayout={imageLayout}
+                                imageSize={imageSize}
+                                animatedStyle={{}}
+                                onDefectPress={() => {}}
+                                userRole={userRole}
+                              />
+                            )}
+                          </Animated.View>
+                        </PinchGestureHandler>
+                      </Animated.View>
+                    </PanGestureHandler>
+                  </GestureHandlerRootView>
+                )}
                 
                 <View style={styles.planInstructions}>
                   <Ionicons name="information-circle-outline" size={16} color={Theme.colors.textSecondary} />
@@ -627,6 +722,35 @@ const styles = StyleSheet.create({
     color: Theme.colors.text,
     flex: 1,
   },
+  statusButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Theme.spacing.sm,
+    marginTop: Theme.spacing.sm,
+  },
+  statusButton: {
+    paddingVertical: Theme.spacing.sm,
+    paddingHorizontal: Theme.spacing.md,
+    borderRadius: Theme.borderRadius.lg,
+    backgroundColor: Theme.colors.cardBackground,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  statusButtonSelected: {
+    borderColor: Theme.colors.primary,
+  },
+  statusButtonText: {
+    color: Theme.colors.text,
+    fontWeight: '700',
+  },
+  statusButtonTextSelected: {
+    color: Theme.colors.primary,
+  },
+  statusHint: {
+    marginTop: Theme.spacing.sm,
+    color: Theme.colors.textSecondary,
+    fontSize: 12,
+  },
   photoCard: {
     margin: Theme.spacing.md,
     padding: Theme.spacing.lg,
@@ -636,12 +760,13 @@ const styles = StyleSheet.create({
     height: 300,
     borderRadius: Theme.borderRadius.md,
     overflow: 'hidden',
-    backgroundColor: Theme.colors.backgroundSecondary,
+    backgroundColor: Theme.colors.cardBackgroundLight,
     marginTop: Theme.spacing.sm,
   },
   defectPhoto: {
-    width: '100%',
-    height: '100%',
+    width: 260,
+    height: 260,
+    borderRadius: Theme.borderRadius.md,
   },
   planCard: {
     margin: Theme.spacing.md,
@@ -659,13 +784,17 @@ const styles = StyleSheet.create({
     height: 400,
     borderRadius: Theme.borderRadius.md,
     overflow: 'hidden',
-    backgroundColor: Theme.colors.backgroundSecondary,
+    backgroundColor: Theme.colors.cardBackgroundLight,
     marginTop: Theme.spacing.sm,
   },
   imageContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  imageTouchable: {
+    width: '100%',
+    height: '100%',
   },
   planImage: {
     width: '100%',
@@ -677,7 +806,7 @@ const styles = StyleSheet.create({
     gap: Theme.spacing.xs,
     marginTop: Theme.spacing.sm,
     padding: Theme.spacing.sm,
-    backgroundColor: Theme.colors.backgroundSecondary,
+    backgroundColor: Theme.colors.cardBackgroundLight,
     borderRadius: Theme.borderRadius.sm,
   },
   planInstructionsText: {
