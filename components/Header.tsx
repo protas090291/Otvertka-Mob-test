@@ -38,7 +38,15 @@ const Header: React.FC<HeaderProps> = ({
   onNotificationPress,
 }) => {
   const [unreadCount, setUnreadCount] = useState(0);
-  const { isOnline, manualOfflineMode, isOffline, toggleManualOfflineMode } = useOffline();
+  const {
+    isOnline,
+    manualOfflineMode,
+    isOffline,
+    pendingMutations,
+    isSyncing,
+    toggleManualOfflineMode,
+    syncNow,
+  } = useOffline();
 
   useEffect(() => {
     let mounted = true;
@@ -69,12 +77,34 @@ const Header: React.FC<HeaderProps> = ({
   const handleToggleOffline = async () => {
     const next = !manualOfflineMode;
     await toggleManualOfflineMode();
+    const pendingHint =
+      pendingMutations > 0
+        ? `\n\nВ очереди мутаций: ${pendingMutations}. ${
+            next ? 'Синхронизация начнётся после выхода из оффлайн-режима.' : 'Запускаю синхронизацию...'
+          }`
+        : '';
     Alert.alert(
       next ? 'Оффлайн-режим включён' : 'Оффлайн-режим выключен',
-      next
-        ? 'Данные будут загружаться из локального кэша. Изменения сейчас не синхронизируются с сервером.'
-        : 'Приложение снова использует сеть.'
+      (next
+        ? 'Данные будут загружаться из локального кэша. Изменения будут сохраняться в очередь и отправятся на сервер, когда вы выйдете из оффлайн-режима.'
+        : 'Приложение снова использует сеть.') + pendingHint
     );
+    if (!next && pendingMutations > 0) {
+      // пользователь выключил ручной оффлайн — попробуем сразу прогнать очередь
+      void syncNow();
+    }
+  };
+
+  const handleLongPressOffline = async () => {
+    if (pendingMutations === 0) return;
+    if (isOffline) {
+      Alert.alert(
+        'Нельзя синхронизировать',
+        'Сейчас приложение в оффлайне. Выключите оффлайн-режим или подключитесь к сети.'
+      );
+      return;
+    }
+    await syncNow();
   };
 
   const offlineIconColor = isOffline ? Theme.colors.warning : Theme.colors.text;
@@ -116,11 +146,20 @@ const Header: React.FC<HeaderProps> = ({
           <View style={styles.rightSection}>
             <TouchableOpacity
               onPress={handleToggleOffline}
+              onLongPress={handleLongPressOffline}
               style={styles.iconButton}
               accessibilityLabel="Переключить оффлайн-режим"
             >
               <Ionicons name={offlineIconName} size={22} color={offlineIconColor} />
-              {isOffline ? <View style={styles.offlineDot} /> : null}
+              {pendingMutations > 0 ? (
+                <View style={[styles.badge, styles.pendingBadge]}>
+                  <Text style={styles.badgeText}>
+                    {isSyncing ? '…' : pendingMutations > 99 ? '99+' : String(pendingMutations)}
+                  </Text>
+                </View>
+              ) : isOffline ? (
+                <View style={styles.offlineDot} />
+              ) : null}
             </TouchableOpacity>
             {onSearchPress ? (
               <TouchableOpacity onPress={onSearchPress} style={styles.iconButton}>
@@ -229,6 +268,9 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+    backgroundColor: Theme.colors.warning,
+  },
+  pendingBadge: {
     backgroundColor: Theme.colors.warning,
   },
 });

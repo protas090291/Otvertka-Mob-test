@@ -2,7 +2,43 @@ import { supabase, supabaseAdmin } from './supabase';
 import { Defect } from '../types';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Buffer } from 'buffer';
-import { cachedFetch } from './offlineCache';
+import { cachedFetch, isEffectivelyOffline } from './offlineCache';
+import { enqueueMutation, isCurrentlyFlushing, registerHandler } from './offlineQueue';
+
+/**
+ * true, если нужно НЕ отправлять мутацию сразу, а положить в очередь оффлайн-мутаций.
+ * При обработке очереди (isCurrentlyFlushing === true) обходим эту проверку,
+ * иначе обработчики уйдут в бесконечный enqueue.
+ */
+const shouldEnqueueOffline = async (): Promise<boolean> => {
+  if (isCurrentlyFlushing()) return false;
+  return await isEffectivelyOffline();
+};
+
+/** Построить оптимистичный Defect из DefectInput (для UI в оффлайне). */
+const buildOptimisticDefect = (input: any): Defect => {
+  const now = new Date().toISOString();
+  return {
+    id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    title: input?.title || '',
+    description: input?.description || '',
+    location: input?.location || '',
+    severity: (input?.severity as Defect['severity']) || 'low',
+    status: (input?.status as Defect['status']) || 'open',
+    photoUrl: input?.photo_url || undefined,
+    createdAt: now,
+    updatedAt: now,
+    project_id: input?.projectId,
+    apartment_id: input?.location || input?.projectId || 'mobile-default',
+    assignedTo: input?.assignedTo,
+    assignedToId: input?.assignedToId,
+    assignedToName: input?.assignedToName,
+    dueDate: input?.dueDate,
+    x_coord: input?.x_coord,
+    y_coord: input?.y_coord,
+    _pendingOffline: true,
+  } as any as Defect;
+};
 
 /**
  * Преобразование данных из Supabase в формат Defect
@@ -376,6 +412,10 @@ export interface DefectUpdate {
 }
 
 export const updateDefectAsAdmin = async (id: string, updates: DefectUpdate): Promise<Defect | null> => {
+  if (await shouldEnqueueOffline()) {
+    await enqueueMutation('defect:updateAsAdmin', { id, updates });
+    return { id, ...(updates as any), _pendingOffline: true } as any;
+  }
   try {
     const updateData: any = {};
 
@@ -445,6 +485,13 @@ export const updateDefectAsAdmin = async (id: string, updates: DefectUpdate): Pr
  * Создать новый дефект
  */
 export const createDefect = async (defect: DefectInput): Promise<Defect | null> => {
+  if (await shouldEnqueueOffline()) {
+    if (!defect?.title || !defect.title.trim()) {
+      throw new Error('Название дефекта обязательно');
+    }
+    await enqueueMutation('defect:create', defect);
+    return buildOptimisticDefect(defect);
+  }
   try {
     // Валидация обязательных полей
     if (!defect.title || !defect.title.trim()) {
@@ -657,6 +704,10 @@ export const createDefect = async (defect: DefectInput): Promise<Defect | null> 
  * Обновить дефект
  */
 export const updateDefect = async (id: string, updates: DefectUpdate): Promise<Defect | null> => {
+  if (await shouldEnqueueOffline()) {
+    await enqueueMutation('defect:update', { id, updates });
+    return { id, ...(updates as any), _pendingOffline: true } as any;
+  }
   try {
     const updateData: any = {};
 
@@ -823,6 +874,10 @@ export const updateDefect = async (id: string, updates: DefectUpdate): Promise<D
  * Удалить дефект
  */
 export const deleteDefect = async (id: string): Promise<boolean> => {
+  if (await shouldEnqueueOffline()) {
+    await enqueueMutation('defect:delete', { id });
+    return true;
+  }
   try {
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
     if (sessionError) throw sessionError;
@@ -1296,3 +1351,20 @@ export const verifyAndFixDefectPhotoUrl = async (defectId: string, currentPhotoU
     return null;
   }
 };
+
+// ---- Регистрация обработчиков оффлайн-очереди ----
+// Эти обработчики вызываются внутри flushQueue(), когда приложение возвращается в онлайн.
+// Благодаря isCurrentlyFlushing()=true публичные функции пропустят проверку оффлайна
+// и выполнят реальный сетевой запрос.
+registerHandler('defect:create', async (payload: any) => {
+  await createDefect(payload as DefectInput);
+});
+registerHandler('defect:update', async (payload: any) => {
+  await updateDefect(payload.id, payload.updates as DefectUpdate);
+});
+registerHandler('defect:updateAsAdmin', async (payload: any) => {
+  await updateDefectAsAdmin(payload.id, payload.updates as DefectUpdate);
+});
+registerHandler('defect:delete', async (payload: any) => {
+  await deleteDefect(payload.id);
+});
