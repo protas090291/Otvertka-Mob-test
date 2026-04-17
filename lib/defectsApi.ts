@@ -2,6 +2,7 @@ import { supabase, supabaseAdmin } from './supabase';
 import { Defect } from '../types';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Buffer } from 'buffer';
+import { cachedFetch } from './offlineCache';
 
 /**
  * Преобразование данных из Supabase в формат Defect
@@ -77,88 +78,44 @@ const mapToDefect = (data: any): Defect => {
  * Используем supabaseAdmin для доступа ко всем дефектам (общий раздел)
  */
 export const getAllDefects = async (limit?: number): Promise<Defect[]> => {
-  try {
-    let query = supabaseAdmin
-      .from('defects')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    // Ограничиваем количество записей для оптимизации (по умолчанию 100)
-    if (limit) {
-      query = query.limit(limit);
-    } else {
-      query = query.limit(100);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Ошибка получения дефектов:', error);
-      throw error;
-    }
-
-    console.log('✅ getAllDefects: загружено дефектов:', data?.length || 0);
-    return (data || []).map(mapToDefect);
-  } catch (error) {
-    console.error('Ошибка в getAllDefects:', error);
-    return [];
-  }
+  const effectiveLimit = limit || 100;
+  return cachedFetch<Defect[]>(
+    `defects:all:${effectiveLimit}`,
+    async () => {
+      const { data, error } = await supabaseAdmin
+        .from('defects')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(effectiveLimit);
+      if (error) {
+        console.error('Ошибка получения дефектов:', error);
+        throw error;
+      }
+      console.log('✅ getAllDefects: загружено дефектов:', data?.length || 0);
+      return (data || []).map(mapToDefect);
+    },
+    { fallback: [] }
+  );
 };
 
 /**
  * Получить дефект по ID
  */
 export const getDefectById = async (id: string): Promise<Defect | null> => {
-  try {
-    const { data, error } = await supabase
-      .from('defects')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error) {
-      console.error('Ошибка получения дефекта по ID:', error);
-      throw error;
-    }
-
-    if (!data) {
-      return null;
-    }
-
-    const defect = mapToDefect(data);
-    console.log('📸 Дефект загружен по ID:', {
-      id: defect.id,
-      photoUrl: defect.photoUrl,
-      originalPhotoUrl: data.photo_url
-    });
-    
-    // ВАЖНО: Исправляем только дубликаты пути в URL (как в веб-версии)
-    if (defect.photoUrl && defect.photoUrl.includes('defect-photos/defect-photos/')) {
-      const fixedUrl = defect.photoUrl.replace(/defect-photos\/defect-photos\//g, 'defect-photos/');
-      console.log(`🔧 [${defect.id}] Исправлен URL (убраны дубликаты): ${fixedUrl.substring(0, 80)}...`);
-      defect.photoUrl = fixedUrl;
-    }
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/6775aa3c-6f0f-4e50-8345-e04987cc8c03', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        hypothesisId: 'C',
-        message: 'getDefectById completed',
-        data: {defectId: defect.id, originalPhotoUrl: data.photo_url, mappedPhotoUrl: defect.photoUrl},
-        timestamp: Date.now(),
-        sessionId: 'debug-session',
-        location: 'defectsApi.ts:125'
-      })
-    }).catch(() => {});
-    // #endregion
-    
-    return defect;
-  } catch (error) {
-    console.error('Ошибка в getDefectById:', error);
-    return null;
-  }
+  return cachedFetch<Defect | null>(
+    `defects:byId:${id}`,
+    async () => {
+      const { data, error } = await supabase
+        .from('defects')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      if (!data) return null;
+      return mapToDefect(data);
+    },
+    { fallback: null }
+  );
 };
 
 /**
@@ -196,23 +153,19 @@ export const listDefectPhotoUrls = async (defectId: string): Promise<string[]> =
  * Получить дефекты по проекту
  */
 export const getDefectsByProject = async (projectId: string): Promise<Defect[]> => {
-  try {
-    const { data, error } = await supabase
-      .from('defects')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Ошибка получения дефектов по проекту:', error);
-      throw error;
-    }
-
-    return (data || []).map(mapToDefect);
-  } catch (error) {
-    console.error('Ошибка в getDefectsByProject:', error);
-    return [];
-  }
+  return cachedFetch<Defect[]>(
+    `defects:byProject:${projectId}`,
+    async () => {
+      const { data, error } = await supabase
+        .from('defects')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map(mapToDefect);
+    },
+    { fallback: [] }
+  );
 };
 
 /**
@@ -220,6 +173,14 @@ export const getDefectsByProject = async (projectId: string): Promise<Defect[]> 
  * Используем supabaseAdmin для доступа ко всем дефектам
  */
 export const getDefectsByApartment = async (apartmentId: string): Promise<Defect[]> => {
+  return cachedFetch<Defect[]>(
+    `defects:byApartment:${apartmentId}`,
+    () => getDefectsByApartmentImpl(apartmentId),
+    { fallback: [] }
+  );
+};
+
+const getDefectsByApartmentImpl = async (apartmentId: string): Promise<Defect[]> => {
   try {
     console.log('🔍 Поиск дефектов по apartment_id:', apartmentId);
     
@@ -370,23 +331,19 @@ export const getDefectsByStatus = async (status: string): Promise<Defect[]> => {
  * Используем supabaseAdmin для доступа ко всем дефектам
  */
 export const getActiveDefects = async (): Promise<Defect[]> => {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('defects')
-      .select('*')
-      .eq('status', 'active')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Ошибка получения активных дефектов:', error);
-      throw error;
-    }
-
-    return (data || []).map(mapToDefect);
-  } catch (error) {
-    console.error('Ошибка в getActiveDefects:', error);
-    return [];
-  }
+  return cachedFetch<Defect[]>(
+    'defects:active',
+    async () => {
+      const { data, error } = await supabaseAdmin
+        .from('defects')
+        .select('*')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map(mapToDefect);
+    },
+    { fallback: [] }
+  );
 };
 
 export interface DefectInput {

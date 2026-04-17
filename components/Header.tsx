@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { Theme } from '../constants/Theme';
 import { UserRole } from '../types';
 import { getUnreadNotificationsCount } from '../lib/notificationsApi';
+import { useOffline } from '../contexts/OfflineContext';
 
 interface HeaderProps {
   title?: string;
@@ -37,6 +38,7 @@ const Header: React.FC<HeaderProps> = ({
   onNotificationPress,
 }) => {
   const [unreadCount, setUnreadCount] = useState(0);
+  const { isOnline, manualOfflineMode, isOffline, toggleManualOfflineMode } = useOffline();
 
   useEffect(() => {
     let mounted = true;
@@ -63,6 +65,24 @@ const Header: React.FC<HeaderProps> = ({
       if (timer) clearInterval(timer);
     };
   }, [currentUserId]);
+
+  const handleToggleOffline = async () => {
+    const next = !manualOfflineMode;
+    await toggleManualOfflineMode();
+    Alert.alert(
+      next ? 'Оффлайн-режим включён' : 'Оффлайн-режим выключен',
+      next
+        ? 'Данные будут загружаться из локального кэша. Изменения сейчас не синхронизируются с сервером.'
+        : 'Приложение снова использует сеть.'
+    );
+  };
+
+  const offlineIconColor = isOffline ? Theme.colors.warning : Theme.colors.text;
+  const offlineIconName: any = manualOfflineMode
+    ? 'cloud-offline'
+    : isOnline
+      ? 'cloud-done-outline'
+      : 'cloud-offline-outline';
 
   return (
     <BlurView intensity={20} tint="dark" style={styles.container}>
@@ -94,6 +114,14 @@ const Header: React.FC<HeaderProps> = ({
           </View>
 
           <View style={styles.rightSection}>
+            <TouchableOpacity
+              onPress={handleToggleOffline}
+              style={styles.iconButton}
+              accessibilityLabel="Переключить оффлайн-режим"
+            >
+              <Ionicons name={offlineIconName} size={22} color={offlineIconColor} />
+              {isOffline ? <View style={styles.offlineDot} /> : null}
+            </TouchableOpacity>
             {onSearchPress ? (
               <TouchableOpacity onPress={onSearchPress} style={styles.iconButton}>
                 <Ionicons name="search-outline" size={24} color={Theme.colors.text} />
@@ -193,6 +221,15 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     lineHeight: 12,
+  },
+  offlineDot: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Theme.colors.warning,
   },
 });
 

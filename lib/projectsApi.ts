@@ -1,4 +1,5 @@
 import { supabase, Project } from './supabase';
+import { cachedFetch } from './offlineCache';
 
 // Реэкспортируем Project для использования в других модулях
 export type { Project };
@@ -47,45 +48,37 @@ export interface ProjectStats {
  * Получить все проекты
  */
 export const getAllProjects = async (): Promise<Project[]> => {
-  try {
-    const { data, error } = await supabase
-      .from('projects')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Ошибка получения проектов:', error);
-      throw error;
-    }
-
-    return data || [];
-  } catch (error) {
-    console.error('Ошибка в getAllProjects:', error);
-    return [];
-  }
+  return cachedFetch<Project[]>(
+    'projects:all',
+    async () => {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    { fallback: [] }
+  );
 };
 
 /**
  * Получить проект по ID
  */
 export const getProjectById = async (id: string): Promise<Project | null> => {
-  try {
-    const { data, error } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error) {
-      console.error('Ошибка получения проекта:', error);
-      throw error;
-    }
-
-    return data;
-  } catch (error) {
-    console.error('Ошибка в getProjectById:', error);
-    return null;
-  }
+  return cachedFetch<Project | null>(
+    `projects:byId:${id}`,
+    async () => {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      return data as Project;
+    },
+    { fallback: null }
+  );
 };
 
 /**
@@ -115,23 +108,19 @@ export const getProjectsByStatus = async (status: string): Promise<Project[]> =>
  * Получить активные проекты
  */
 export const getActiveProjects = async (): Promise<Project[]> => {
-  try {
-    const { data, error } = await supabase
-      .from('projects')
-      .select('*')
-      .in('status', ['planning', 'construction'])
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Ошибка получения активных проектов:', error);
-      throw error;
-    }
-
-    return data || [];
-  } catch (error) {
-    console.error('Ошибка в getActiveProjects:', error);
-    return [];
-  }
+  return cachedFetch<Project[]>(
+    'projects:active',
+    async () => {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .in('status', ['planning', 'construction'])
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    { fallback: [] }
+  );
 };
 
 /**

@@ -2,6 +2,7 @@
 import '../polyfills';
 
 import { supabase, supabaseAdmin } from './supabase';
+import { cachedFetch } from './offlineCache';
 
 export type UserRole = 'admin' | 'management' | 'user' | 'technadzor';
 
@@ -30,29 +31,25 @@ export type UserProfileLite = {
 };
 
 export const getActiveUserProfiles = async (): Promise<UserProfileLite[]> => {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('user_profiles')
-      .select('id, full_name, email, is_active')
-      .eq('is_active', true)
-      .order('full_name', { ascending: true });
-
-    if (error) {
-      console.error('Ошибка получения списка пользователей:', error);
-      return [];
-    }
-
-    const items = (data || []) as Array<{ id: string; full_name: string | null; email: string; is_active: boolean }>;
-    return items
-      .map((u) => ({
-        ...u,
-        displayName: (u.full_name && u.full_name.trim() !== '' ? u.full_name : (u.email || '').split('@')[0]) || 'Пользователь',
-      }))
-      .sort((a, b) => a.displayName.localeCompare(b.displayName, 'ru'));
-  } catch (error) {
-    console.error('Ошибка в getActiveUserProfiles:', error);
-    return [];
-  }
+  return cachedFetch<UserProfileLite[]>(
+    'users:active',
+    async () => {
+      const { data, error } = await supabaseAdmin
+        .from('user_profiles')
+        .select('id, full_name, email, is_active')
+        .eq('is_active', true)
+        .order('full_name', { ascending: true });
+      if (error) throw error;
+      const items = (data || []) as Array<{ id: string; full_name: string | null; email: string; is_active: boolean }>;
+      return items
+        .map((u) => ({
+          ...u,
+          displayName: (u.full_name && u.full_name.trim() !== '' ? u.full_name : (u.email || '').split('@')[0]) || 'Пользователь',
+        }))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName, 'ru'));
+    },
+    { fallback: [] }
+  );
 };
 
 /**

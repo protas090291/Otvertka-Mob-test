@@ -15,6 +15,7 @@ import LoginScreen from './screens/LoginScreen';
 import { getCurrentUser, signOut, UserProfile } from './lib/authApi';
 import { supabase } from './lib/supabase';
 import { Theme } from './constants/Theme';
+import { OfflineProvider } from './contexts/OfflineContext';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -65,7 +66,7 @@ export default function App() {
   if (isLoading) {
     return (
       <SafeAreaProvider>
-        <>
+        <OfflineProvider>
           <StatusBar style="light" />
           <View
             style={{
@@ -78,7 +79,7 @@ export default function App() {
             <ActivityIndicator size="large" color={Theme.colors.primary} />
             <Text style={{ color: Theme.colors.text, marginTop: 16 }}>Загрузка...</Text>
           </View>
-        </>
+        </OfflineProvider>
       </SafeAreaProvider>
     );
   }
@@ -86,22 +87,24 @@ export default function App() {
   if (!currentUser) {
     return (
       <SafeAreaProvider>
-        <>
+        <OfflineProvider>
           <StatusBar style="light" />
           <ErrorBoundary>
             <LoginScreen onLogin={handleLogin} />
           </ErrorBoundary>
-        </>
+        </OfflineProvider>
       </SafeAreaProvider>
     );
   }
 
   return (
     <SafeAreaProvider>
-      <ErrorBoundary>
-        <StatusBar style="light" />
-        <AppNavigator userRole={currentUser.role} currentUser={currentUser} onLogout={handleLogout} />
-      </ErrorBoundary>
+      <OfflineProvider>
+        <ErrorBoundary>
+          <StatusBar style="light" />
+          <AppNavigator userRole={currentUser.role} currentUser={currentUser} onLogout={handleLogout} />
+        </ErrorBoundary>
+      </OfflineProvider>
     </SafeAreaProvider>
   );
 }
