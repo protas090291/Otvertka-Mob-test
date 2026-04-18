@@ -97,3 +97,7 @@ coverage/
 !tsconfig.json
 !babel.config.js
 !metro.config.js
+
+build_info.json
+build_log_*.txt
+
