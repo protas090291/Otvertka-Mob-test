@@ -1,0 +1,53 @@
+﻿{
+  "id": "ce6fe8ba-6645-46f3-bc6a-16c6f5a2af6a",
+  "status": "ERRORED",
+  "platform": "ANDROID",
+  "error": {
+    "errorCode": "EAS_BUILD_UNKNOWN_GRADLE_ERROR",
+    "message": "Gradle build failed with unknown error. See logs for the \"Run gradlew\" phase for more information."
+  },
+  "artifacts": {},
+  "fingerprint": {
+    "id": "019d9b4d-8fd6-77af-a1e0-7248055b7262",
+    "hash": "d142618dc13401d50976f01f04d3b006dd669778"
+  },
+  "initiatingActor": {
+    "id": "6eb4a69b-74ae-49c8-811b-c52460d0afa9",
+    "displayName": "zakhar2004"
+  },
+  "logFiles": [
+    "https://job-logs.eascdn.net/production/ce6fe8ba-6645-46f3-bc6a-16c6f5a2af6a/1776427045097-89217208-8198-4c8a-8004-6e6b8ac29a9e.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260418%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260418T070712Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=be10ea84479cead6bd26e4a2472d688f2f13d6acd24b879eb382be0eb716c79ea9d49e9a70a315141c4f8ac5deba9fc51f14da92f5545181bb648c8cb2255f69f26a930bbf2cb49410da39190c7e53ddd517e93582a18edfab37b0d9e0199598a2f7977cf9cd9b86f08d8f490b66ff94ac070ffcc1d41f784b77fe276a56c1a9b7b7a04739dfc09ee2e695e51db7bbd0f2eb94b4e24ba064e8e163cdf4c75cee419a46cd501ccd6b2091b52416b6de5d8abfc632ab9c5eb55d576611d97ae675e8e6151a50e493da30a678340d96e737e7f2f26602a76f9f58085f73d34712e6c6bbcba913defbc11590e507589d2d80abe1d5349bc9161897c027c1b390599a",
+    "https://job-logs.eascdn.net/production/ce6fe8ba-6645-46f3-bc6a-16c6f5a2af6a/1776428690813-dce27d60-863d-4513-b19a-e9290c7058b8.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260418%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260418T070712Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=84353054272951ae1ffbc70c16c62348018e48f98f82dbb382a0fd563bc80599524463a4f15a8142368c7bbd79228551a1da5fb492678048a7716c7c4da3427f353fab06375e02973cb7b597e3bf8a8a73fa7954bcca11b1c773f5d9904378efba9ceb4f048de183cc3edd16b82a92eb1492861a8e64855614cec0ac1f5f603f74d0a57f9ce6cb0878ed477a3a875e02d88f71aef6ea83606fd24918ab5033bc94559abcf86d5789e7ff546e130b5119c443e2063e2cb70f5cfafdae56dc6a4909eff99258e88046eb1a3185d5b67d069b34d4bd64fc20b28b8802f504f2c821c32687a08f64baf68ad0b4ea5e5071e8d1c7044ab91d8c534b9a9e914b6bc2ee",
+    "https://job-logs.eascdn.net/production/ce6fe8ba-6645-46f3-bc6a-16c6f5a2af6a/1776428691111-9eec992c-bad8-463c-85ee-ec0d8f63a608.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260418%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260418T070712Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=1a388f8fa7e76fb868a9a924cb4077c62c495972cd127d7c1edfc386f0aabb137b1cdaaf7e01c5b9b641286da1b434e9e9cc7ad4c5a69ec627196f44b4a56f9ad5a04d5b36a510e6f724f5c4536d4ad94af40366f2bfa650ea6e31d62adf3515ef8fefa0cc84525b8021cf44e71e9672d589b091d41244a1527749b6176928659acefc3fb5a39321a172ddf235dc0ab9723a0180ba14715e473bbf71918486f4d7955097718a2faff1652712835733d9e989d7ea75ee2b16e72bfe185ebe24faf081ce88caf048bde34791b13cdd1fa7d9b3010e644b4a15b15cf60149ba220452c9ef372b428ac2a4a020463024cb51835ac2d848c9e27da42aeb541a684243",
+    "https://job-logs.eascdn.net/production/ce6fe8ba-6645-46f3-bc6a-16c6f5a2af6a/1776428691306-ca96faba-34f4-4a8b-8a07-63d100d67def.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260418%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260418T070712Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=2be869e87c059b88ae4eb0753ce1cc56ba709e17a5c49c0df1f30a1e12a42fda419e8f2eb9611da6f4eea07f713beda5c9ba617d2f1a0ea315910f3c059172161c81dc8ad722408d547d258487c4e9528d60f0e80883a2c8028b164b46f675b57bf2e70a451c8bb407e6eaf005ae01af9dd24e0a54764568b42da5f32ea51db975d2c92f88965008a831bd844b21cad3f37e2b296d402563460dd1601c27db826eb18f2f12d29c0a55054385f16768e4f842f8795dfa76bb65aa892345d80c856f3a470b8edca2d361568f5a281ee7f4b450a997d9282f550027b0ebd1aff89b9afb3a719fa3600c102194cfb6b1ef880744d066c697460e80f017d283b6e32a"
+  ],
+  "project": {
+    "id": "6846e17a-aef6-423e-92d0-44bd7aa58ef0",
+    "name": "otvertka-mobile",
+    "slug": "otvertka-mobile",
+    "ownerAccount": {
+      "id": "ac75962c-dbf2-47ed-b6e0-ce313e09c98e",
+      "name": "zakhar2004"
+    }
+  },
+  "channel": "production",
+  "distribution": "INTERNAL",
+  "buildProfile": "preview",
+  "sdkVersion": "54.0.0",
+  "appVersion": "2.0.0",
+  "appBuildVersion": "1",
+  "runtimeVersion": "2.0.0",
+  "gitCommitHash": "121838d6d0c479aeff61f5629295fb290dc34ec7",
+  "gitCommitMessage": "Offline mutation queue: defects create/update/delete with auto-sync on reconnect",
+  "priority": "NORMAL",
+  "createdAt": "2026-04-17T11:57:24.788Z",
+  "updatedAt": "2026-04-17T16:00:50.920Z",
+  "completedAt": "2026-04-17T12:28:23.117Z",
+  "expirationDate": "2026-05-01T11:57:24.813Z",
+  "isForIosSimulator": false,
+  "metrics": {
+    "buildWaitTime": 197,
+    "buildQueueTime": 1687817,
+    "buildDuration": 169668
+  }
+}
