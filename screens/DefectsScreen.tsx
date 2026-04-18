@@ -4,6 +4,8 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
+import CachedImage from '../components/CachedImage';
+import { prefetchImages } from '../lib/imageCache';
 import { Ionicons } from '@expo/vector-icons';
 import Header from '../components/Header';
 import Card from '../components/Card';
@@ -119,6 +121,18 @@ const DefectsScreen: React.FC<DefectsScreenProps> = ({ navigation, route }) => {
 
       setAllDefects(data);
       setDefects(applyAssigneeFilter(data));
+
+      // Префетч всех фото дефектов, чтобы они открывались и в оффлайне.
+      try {
+        const photoUrls = data
+          .map((d) => d?.photoUrl)
+          .filter((u): u is string => !!u && typeof u === 'string' && (u.startsWith('http://') || u.startsWith('https://')));
+        if (photoUrls.length) {
+          void prefetchImages(photoUrls);
+        }
+      } catch {
+        // ignore
+      }
     } catch (error) {
       console.error('❌ Ошибка загрузки дефектов:', error);
     } finally {
@@ -468,7 +482,7 @@ const DefectsScreen: React.FC<DefectsScreenProps> = ({ navigation, route }) => {
                         }}
                         activeOpacity={0.9}
                       >
-                        <Image 
+                        <CachedImage 
                           key={defect.photoUrl} // Добавляем key для принудительной перезагрузки при изменении URL
                           source={{ 
                             uri: defect.photoUrl

@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
+import CachedImage from '../components/CachedImage';
+import { prefetchImages } from '../lib/imageCache';
 import { Ionicons } from '@expo/vector-icons';
 import Header from '../components/Header';
 import Card from '../components/Card';
@@ -85,6 +87,8 @@ const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, rou
                 .filter((u): u is string => !!u && u.trim() !== '')
                 .filter((u, idx, arr) => arr.indexOf(u) === idx);
               setPhotoUrls(merged);
+              // Префетч всех фото дефекта в локальный файловый кэш
+              if (merged.length) void prefetchImages(merged);
             } catch {
               setPhotoUrls(freshDefect.photoUrl ? [freshDefect.photoUrl] : []);
             }
@@ -160,6 +164,10 @@ const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, rou
       const apartmentPlan = await loadApartmentPlan(apartmentId);
       if (apartmentPlan) {
         setPlan(apartmentPlan);
+        // Префетч превью плана, чтобы план открывался и в оффлайне
+        if (apartmentPlan.previewUrl) {
+          void prefetchImages([apartmentPlan.previewUrl]);
+        }
         // Сбрасываем трансформации
         scale.value = 2.0;
         translateX.value = 0;
@@ -475,7 +483,7 @@ const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, rou
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {photoUrls.map((url) => (
                   <View key={url} style={{ marginRight: 10 }}>
-                    <Image
+                    <CachedImage
                       key={url}
                       source={{ uri: url }}
                       style={styles.defectPhoto}
@@ -594,7 +602,7 @@ const DefectDetailScreen: React.FC<DefectDetailScreenProps> = ({ navigation, rou
                         >
                           <Animated.View style={[styles.imageContainer, animatedImageStyle]}>
                             <View style={styles.imageTouchable} onLayout={handleImageLayout}>
-                              <AnimatedImage
+                              <CachedImage
                                 source={{ uri: getImageUrl(plan.previewUrl) }}
                                 style={styles.planImage}
                                 contentFit="contain"

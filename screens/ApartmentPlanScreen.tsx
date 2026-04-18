@@ -5,6 +5,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import CachedImage from '../components/CachedImage';
+import { prefetchImages } from '../lib/imageCache';
 import { GestureHandlerRootView, PinchGestureHandler, PanGestureHandler, State } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming, withSpring, runOnJS } from 'react-native-reanimated';
 import Header from '../components/Header';
@@ -138,6 +140,18 @@ const ApartmentPlanScreen: React.FC<ApartmentPlanScreenProps> = ({ navigation, r
       }
       setDefects(data || []);
       console.log('📋 Состояние defects обновлено, количество:', data?.length || 0);
+
+      // Префетч всех фото дефектов, чтобы они открывались и в оффлайне.
+      try {
+        const photoUrls = (data || [])
+          .map((d: any) => d?.photo_url)
+          .filter((u: any): u is string => !!u && typeof u === 'string');
+        if (photoUrls.length) {
+          void prefetchImages(photoUrls);
+        }
+      } catch {
+        // ignore
+      }
     } catch (error) {
       console.error('Ошибка загрузки дефектов:', error);
       setDefects([]);
@@ -153,6 +167,10 @@ const ApartmentPlanScreen: React.FC<ApartmentPlanScreenProps> = ({ navigation, r
       const apartmentPlan = await loadApartmentPlan(apartmentNumber);
       if (apartmentPlan) {
         setPlan(apartmentPlan);
+        // Префетч превью плана, чтобы он открывался в оффлайне.
+        if (apartmentPlan.previewUrl) {
+          void prefetchImages([apartmentPlan.previewUrl]);
+        }
         setIsSelectingLocation(!!apartmentPlan.previewUrl);
         if (!apartmentPlan.previewUrl && apartmentPlan.documentUrl) {
           Alert.alert('План доступен только в PDF', 'Для отметки дефектов требуется превью (PNG/JPG). Сейчас можно открыть PDF.');
@@ -671,7 +689,7 @@ const ApartmentPlanScreen: React.FC<ApartmentPlanScreenProps> = ({ navigation, r
                               onLayout={handleImageLayout}
                               style={styles.imageTouchable}
                             >
-                              <AnimatedImage
+                              <CachedImage
                                 source={{ uri: getImageUrl(plan.previewUrl || '') }}
                                 style={styles.planImage}
                                 contentFit="contain"
